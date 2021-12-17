@@ -22,6 +22,7 @@ namespace mvecs
     constexpr bool IsComponentDataType = 
     std::is_base_of<IComponentData, T>::value && 
     std::is_trivial<T>::value && 
+    std::is_trivially_destructible<T>::value && 
     TypeBinding::HasTypeInfoValue<T>;
 }  // namespace mvecs
 
