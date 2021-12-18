@@ -30,7 +30,7 @@ struct C : public mvecs::IComponentData
 class TestSystem : public mvecs::ISystem
 {
 public:
-    TestSystem(const std::shared_ptr<mvecs::World>& pWorld)
+    TestSystem(mvecs::World* const pWorld)
         : ISystem(pWorld)
     {
     }
@@ -95,7 +95,7 @@ int main()
 
     A got = world->getComponentData<A>(e2);
 
-    std::cerr << got.b << "\n";
+    std::cerr << got.a << "\n";
 
     return 0;
 }

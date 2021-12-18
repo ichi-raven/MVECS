@@ -19,7 +19,7 @@ namespace mvecs
      * @details いわゆるScene
      * 
      */
-    class World : public std::enable_shared_from_this<World>
+    class World
     {
     public:
         /**
@@ -92,10 +92,10 @@ namespace mvecs
          * @tparam T 追加するSystemの型
          * @tparam typename System型判定用
          */
-        template <typename T, typename = std::enable_if_t<IsSystemType<T>>>
+        template <typename T, typename = std::is_base_of<ISystem, T>>
         void addSystem()
         {
-            mSystems.emplace_back(std::make_unique<T>(shared_from_this()));
+            mSystems.emplace_back(std::make_unique<T>(this));
             startSystemImpl(mSystems.size() - 1);
         }
 

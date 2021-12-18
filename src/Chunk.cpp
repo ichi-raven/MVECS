@@ -35,36 +35,10 @@ namespace mvecs
         Entity entity(mNextEntityIndex, mID);
 
         // アクセスのオフセット
-        const std::size_t&& memOffset = mArchetype.getAllTypeSize() * mMaxEntityNum;
-        std::size_t* memToIndexPart   = reinterpret_cast<std::size_t*>(mMemory.get() + memOffset);
-
-        // WARNING : DEBUG!!!!
-        // {
-        //     std::cerr << "allocated index : " << entity.getID() << "\n";
-        //     std::cerr << "before-----------\n";
-        //     for (std::size_t i = 0; i < mNextEntityIndex; ++i)
-        //     {
-        //         std::cerr << memToIndexPart[i] << "\n";
-        //     }
-        //     std::cerr << "\n\n";
-        // }
+        std::size_t* memToIndexPart = reinterpret_cast<std::size_t*>(mMemory.get() + mArchetype.getAllTypeSize() * mMaxEntityNum);
 
         // 添字を書き込む
         memToIndexPart[entity.getID()] = mEntityNum;
-
-        // // 更新(for DEBUG)
-        // ++mNextEntityIndex;
-        // ++mEntityNum;
-
-        // WARNING : DEBUG!!!!
-        // {
-        //     std::cerr << "after------------\n";
-        //     for (std::size_t i = 0; i < mMaxEntityNum; ++i)
-        //     {
-        //         std::cerr << memToIndexPart[i] << "\n";
-        //     }
-        //     std::cerr << "\n\n";
-        // }
 
         // // 更新
         ++mNextEntityIndex;
@@ -76,8 +50,7 @@ namespace mvecs
     void Chunk::deallocate(const Entity& entity)
     {
         // アクセスのオフセット
-        const std::size_t&& memOffset = mArchetype.getAllTypeSize() * mMaxEntityNum;
-        std::size_t* memToIndexPart   = reinterpret_cast<std::size_t*>(mMemory.get() + memOffset);
+        std::size_t* memToIndexPart = reinterpret_cast<std::size_t*>(mMemory.get() + mArchetype.getAllTypeSize() * mMaxEntityNum);
 
         // 削除した部分のindexをクリア
         std::size_t deallocatedIndex   = memToIndexPart[entity.getID()];
@@ -107,7 +80,54 @@ namespace mvecs
         --mEntityNum;
 
         if (mEntityNum <= mMaxEntityNum / 2)
-          reallocate(mMaxEntityNum / 2);
+            reallocate(mMaxEntityNum / 2);
+    }
+
+    Entity Chunk::moveTo(const Entity& entity, Chunk& other)
+    {
+        // アクセスのオフセット
+        const std::size_t* srcMemToIndexPart = reinterpret_cast<std::size_t*>(mMemory.get() + mArchetype.getAllTypeSize() * mMaxEntityNum);
+        const std::size_t srcIndex           = srcMemToIndexPart[entity.getID()];
+        assert(srcIndex != std::numeric_limits<size_t>::max() || !"this entity was not allocated!");
+
+        // 移動先Entityをallocate
+        Entity rtn                           = other.allocate();
+        const std::size_t* dstMemToIndexPart = reinterpret_cast<std::size_t*>(other.mMemory.get() + other.mArchetype.getAllTypeSize() * other.mMaxEntityNum);
+        const std::size_t dstIndex           = dstMemToIndexPart[rtn.getID()];
+
+        std::byte *dst = nullptr, *src = nullptr;
+        std::size_t dstOffset = 0, srcOffset = 0;
+        std::size_t size = 0;
+        if (mArchetype.getAllTypeSize() < other.mArchetype.getAllTypeSize())  // 移動元 < 移動先
+        {
+            for (std::size_t i = 0; i < mArchetype.getTypeCount(); ++i)
+            {
+                srcOffset = mArchetype.getTypeOffset(i, mMaxEntityNum);
+                dstOffset = other.mArchetype.getTypeOffset(other.mArchetype.getTypeIndex(mArchetype.getTypeHash(i)), other.mMaxEntityNum);
+
+                size = mArchetype.getTypeIndex(i);
+                dst  = other.mMemory.get() + dstOffset + dstIndex * size;
+                src  = mMemory.get() + srcOffset * srcIndex * size;
+
+                std::memcpy(dst, src, size);
+            }
+        }
+        else  // 移動元 >= 移動先
+        {
+            for (std::size_t i = 0; i < other.mArchetype.getTypeCount(); ++i)
+            {
+                srcOffset = other.mArchetype.getTypeOffset(other.mArchetype.getTypeIndex(mArchetype.getTypeHash(i)), other.mMaxEntityNum);
+                dstOffset = mArchetype.getTypeOffset(i, mMaxEntityNum);
+
+                size = mArchetype.getTypeIndex(i);
+                dst  = mMemory.get() + srcOffset * srcIndex * size;
+                src  = other.mMemory.get() + dstOffset + dstIndex * size;
+
+                std::memcpy(dst, src, size);
+            }
+        }
+
+        return rtn;
     }
 
     void Chunk::reallocate(std::size_t newMaxEntityNum)
@@ -120,12 +140,10 @@ namespace mvecs
 
         {  // データ移行
             size_t newOffset = 0, oldOffset = 0;
-            size_t typeSize = 0;
+            size_t typeSize             = 0;
             const auto& oldMaxEntityNum = mMaxEntityNum;
             for (size_t i = 0; i < mArchetype.getTypeCount(); ++i)
             {
-                // DEBUG!!!
-                //std::cerr << "DEBUG : " << i << "\n";
                 std::memcpy(newMem + newOffset, mMemory.get() + oldOffset, mArchetype.getTypeSize(i) * mEntityNum);
 
                 typeSize = mArchetype.getTypeSize(i);

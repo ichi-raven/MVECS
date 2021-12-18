@@ -2,8 +2,9 @@
 
 namespace mvecs
 {
-    ISystem::ISystem(const std::shared_ptr<World>& pWorld)
+    ISystem::ISystem(World* const pWorld)
+     : mpWorld(pWorld)
     {
-        mpWorld = pWorld;
+
     }
 }
