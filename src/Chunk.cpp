@@ -5,13 +5,34 @@
 
 namespace mvecs
 {
-    Chunk::Chunk(std::size_t ID, Archetype archetype)
+    Chunk::Chunk(const std::size_t ID, const Archetype& archetype)
         : mID(ID)
         , mArchetype(archetype)
         , mMaxEntityNum(1)
         , mEntityNum(0)
         , mNextEntityIndex(0)
     {
+    }
+
+    Chunk::Chunk(Chunk&& src)
+        : mID(src.mID)
+        , mArchetype(src.mArchetype)
+        , mMemory(std::move(src.mMemory))
+        , mMaxEntityNum(src.mMaxEntityNum)
+        , mEntityNum(src.mEntityNum)
+        , mNextEntityIndex(src.mNextEntityIndex)
+    {
+    }
+
+    Chunk& Chunk::operator=(Chunk&& src)
+    {
+        mID              = src.mID;
+        mArchetype       = src.mArchetype;
+        mMemory          = std::move(src.mMemory);
+        mMaxEntityNum    = src.mMaxEntityNum;
+        mEntityNum       = src.mEntityNum;
+        mNextEntityIndex = src.mNextEntityIndex;
+        return *this;
     }
 
     std::size_t Chunk::getID() const
@@ -26,7 +47,7 @@ namespace mvecs
 
     Entity Chunk::allocate()
     {
-        if (mEntityNum >= mMaxEntityNum)
+        if (mEntityNum + 1 >= mMaxEntityNum)
         {
             // メモリを再割り当てする
             reallocate(mMaxEntityNum * 2);  // std::vectorの真似
@@ -40,7 +61,7 @@ namespace mvecs
         // 添字を書き込む
         memToIndexPart[entity.getID()] = mEntityNum;
 
-        // // 更新
+        // 更新
         ++mNextEntityIndex;
         ++mEntityNum;
 
@@ -56,30 +77,33 @@ namespace mvecs
         std::size_t deallocatedIndex   = memToIndexPart[entity.getID()];
         memToIndexPart[entity.getID()] = std::numeric_limits<std::size_t>::max();
 
-        // 削除した場所以後の全ての添字を書き換える
-        for (std::size_t i = 1; i < mEntityNum; ++i)
-            if (--memToIndexPart[i] < 0)  // 書き込み
-                assert(!"invalid index!");
+        // 削除した場所以後の割り当てられた全ての添字を書き換える
+        for (std::size_t i = entity.getID() + 1; i < mEntityNum; ++i)
+        {
+            --memToIndexPart[i];
+            assert(memToIndexPart[i] >= 0);
+            assert(memToIndexPart[i] < mMaxEntityNum);
+        }
 
         // 実際のメモリ領域を移動
-        if (mEntityNum > deallocatedIndex)
+        if (mEntityNum > deallocatedIndex + 1)
         {
             std::byte *dst = nullptr, *src = nullptr;
             std::size_t offset = 0;
             for (std::size_t i = 0; i < mArchetype.getTypeCount(); ++i)
             {
-                auto&& typeSize = mArchetype.getTypeSize(i);
-                dst             = mMemory.get() + offset + deallocatedIndex * typeSize;
-                src             = dst + typeSize;  // 後ろに1つずらす
+                const auto&& typeSize = mArchetype.getTypeSize(i);
+                dst                   = mMemory.get() + offset + deallocatedIndex * typeSize;
+                src                   = dst + typeSize;  // 後ろに1つずらす
                 std::memmove(dst, src, (mEntityNum - deallocatedIndex - 1) * typeSize);
-                offset += mMaxEntityNum * typeSize;
+                offset += typeSize * mMaxEntityNum;
             }
         }
 
         // Entity数更新
         --mEntityNum;
 
-        if (mEntityNum <= mMaxEntityNum / 2)
+        if (mEntityNum < mMaxEntityNum / 2 && mMaxEntityNum > 1)
             reallocate(mMaxEntityNum / 2);
     }
 
@@ -107,7 +131,7 @@ namespace mvecs
 
                 size = mArchetype.getTypeIndex(i);
                 dst  = other.mMemory.get() + dstOffset + dstIndex * size;
-                src  = mMemory.get() + srcOffset * srcIndex * size;
+                src  = mMemory.get() + srcOffset + srcIndex * size;
 
                 std::memcpy(dst, src, size);
             }
@@ -120,7 +144,7 @@ namespace mvecs
                 dstOffset = mArchetype.getTypeOffset(i, mMaxEntityNum);
 
                 size = mArchetype.getTypeIndex(i);
-                dst  = mMemory.get() + srcOffset * srcIndex * size;
+                dst  = mMemory.get() + srcOffset + srcIndex * size;
                 src  = other.mMemory.get() + dstOffset + dstIndex * size;
 
                 std::memcpy(dst, src, size);
@@ -130,34 +154,75 @@ namespace mvecs
         return rtn;
     }
 
-    void Chunk::reallocate(std::size_t newMaxEntityNum)
+    void Chunk::reallocate(const std::size_t newMaxEntityNum)
     {
         assert(newMaxEntityNum != mMaxEntityNum);
         assert(newMaxEntityNum >= mEntityNum);
 
+        const auto oldMaxEntityNum = mMaxEntityNum;
+        
         // 新メモリ割当て
         std::byte* newMem = new std::byte[(mArchetype.getAllTypeSize() + sizeof(std::size_t)) * newMaxEntityNum];
 
         {  // データ移行
             size_t newOffset = 0, oldOffset = 0;
-            size_t typeSize             = 0;
-            const auto& oldMaxEntityNum = mMaxEntityNum;
-            for (size_t i = 0; i < mArchetype.getTypeCount(); ++i)
+            const auto&& typeCount     = mArchetype.getTypeCount();
+            for (size_t i = 0; i < typeCount; ++i)
             {
-                std::memcpy(newMem + newOffset, mMemory.get() + oldOffset, mArchetype.getTypeSize(i) * mEntityNum);
+                const auto&& typeSize = mArchetype.getTypeSize(i);
+                std::memcpy(newMem + newOffset, mMemory.get() + oldOffset, typeSize * mEntityNum);
 
-                typeSize = mArchetype.getTypeSize(i);
                 newOffset += typeSize * newMaxEntityNum;
                 oldOffset += typeSize * oldMaxEntityNum;
             }
 
             // ID-indexテーブル部
             std::memcpy(newMem + newOffset, mMemory.get() + oldOffset, sizeof(std::size_t) * oldMaxEntityNum);
+            if (oldMaxEntityNum < newMaxEntityNum)// 確保領域を増やす場合のみindex部をクリアする必要がある
+            {
+                // ID-index部の新規のメモリクリア
+                const auto&& newOffsetToIndex = (mArchetype.getAllTypeSize() * newMaxEntityNum) + (sizeof(std::size_t) * oldMaxEntityNum);
+                std::memset(newMem + newOffsetToIndex, 0xFF, sizeof(std::size_t) * (newMaxEntityNum - oldMaxEntityNum));
+            }
         }
 
         // アドレス移行
         mMemory.reset(newMem);
+        // 更新
+        if (oldMaxEntityNum > newMaxEntityNum)// 確保領域を減らす場合は次のEntityに割り当てるIDを戻す必要がある
+            mNextEntityIndex *= 0.5;// 除算より速い?
+        
         mMaxEntityNum = newMaxEntityNum;
+    }
+
+    void Chunk::dumpMemory() const
+    {
+        const std::byte* const p = mMemory.get();
+        for (std::size_t typeIdx = 0; typeIdx < mArchetype.getTypeCount(); ++typeIdx)
+        {
+            std::cerr << "type begin----------\n";
+            const std::size_t offset = mArchetype.getTypeOffset(typeIdx, mMaxEntityNum);
+            const std::size_t all    = offset + mArchetype.getTypeSize(typeIdx) * mMaxEntityNum;
+            for (std::size_t i = offset; i < all; ++i)
+            {
+                if (i % 4 == 0)
+                    std::cerr << std::dec << i << " ~ " << i + 3 << " : ";
+                std::cerr << std::hex << static_cast<int>(p[i]) << " ";
+                if (i % 4 == 3)
+                    std::cerr << "\n";
+            }
+            std::cerr << "type end----------\n";
+        }
+        std::cerr << std::dec;
+    }
+
+    void Chunk::dumpIndexMemory() const
+    {
+        // アクセスのオフセット
+        const std::size_t* const memToIndexPart = reinterpret_cast<std::size_t*>(mMemory.get() + mArchetype.getAllTypeSize() * mMaxEntityNum);
+
+        for (std::size_t i = 0; i < mMaxEntityNum; ++i)
+            std::cerr << "[" << i << "] : " << memToIndexPart[i] << "\n";
     }
 
 }  // namespace mvecs

@@ -60,9 +60,6 @@ namespace mvecs
          */
         constexpr bool isIn(const Archetype& other) const
         {
-            if (*this == other)
-                return true;
-
             if (mTypeCount <= other.mTypeCount)
                 return false;
 

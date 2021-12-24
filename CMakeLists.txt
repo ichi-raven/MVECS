@@ -19,5 +19,5 @@ file(GLOB_RECURSE SRCS src/*.c*)
 add_executable(App ${SRCS})
 
 target_link_libraries(App
-
+   pthread
 )

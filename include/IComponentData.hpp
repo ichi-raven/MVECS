@@ -6,7 +6,7 @@
 namespace mvecs
 {
     /**
-     * @brief ComponentDataのインタフェース PODタイプ
+     * @brief ComponentDataのインタフェース
      * 
      */
     struct IComponentData
@@ -15,7 +15,7 @@ namespace mvecs
 
     /**
      * @brief ComponentDataにふさわしい型かチェックする
-     * @details IComponentDataを継承していて、trivial型であり、TypeInfo制約をクリアしている型
+     * @details IComponentDataを継承していて、trivial型・trivially_destructibleであり、TypeInfo制約をクリアしている型
      * @tparam T チェックする型
      */
     template <typename T>
