@@ -16,8 +16,18 @@ include_directories(
 #file(GLOB_RECURSE HDRS include/*.h*)
 file(GLOB_RECURSE SRCS src/*.c*)
 
-add_executable(App ${SRCS})
+file(GLOB_RECURSE HDRS include/*.h*)
+file(GLOB_RECURSE SRCS src/*.c*)
 
-target_link_libraries(App
+add_library(
+   mvecs STATIC
+   ${SRCS}
+)
+
+target_link_libraries(mvecs
    pthread
 )
+
+install(TARGETS mvecs ARCHIVE DESTINATION lib LIBRARY DESTINATION lib)
+install(FILES ${HDRS} DESTINATION include/MVECS)
+

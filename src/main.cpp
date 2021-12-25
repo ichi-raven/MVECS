@@ -1,14 +1,10 @@
-#include <Archetype.hpp>
-#include <Chunk.hpp>
-#include <IComponentData.hpp>
-#include <ISystem.hpp>
-#include <TypeInfo.hpp>
-#include <World.hpp>
+
+#include "MVECS.hpp"
 #include <iostream>
 
 struct A : public mvecs::IComponentData
 {
-    USE_TYPEINFO(A)
+    COMPONENT_DATA(A)
     int a;
     int b;
     int c;
@@ -18,13 +14,13 @@ struct A : public mvecs::IComponentData
 
 struct B : public mvecs::IComponentData
 {
-    USE_TYPEINFO(B)
+    COMPONENT_DATA(B)
     int d[5];
 };
 
 struct C : public mvecs::IComponentData
 {
-    USE_TYPEINFO(C)
+    COMPONENT_DATA(C)
     char e[10];
     char f;
     float a;
@@ -59,8 +55,6 @@ public:
     {
         std::cerr << "on end\n";
     }
-
-private:
 };
 
 /**
@@ -73,42 +67,6 @@ int main()
     std::cerr << "main function\n";
 
     std::unique_ptr<mvecs::World> world = std::make_unique<mvecs::World>();
-
-    auto e1 = world->createEntity<A, B, C>();
-    auto e2 = world->createEntity<A, C>();
-    auto e3 = world->createEntity<C, B, A>();
-
-    for (std::size_t i = 0; i < 10000; ++i)
-    {
-        world->createEntity<A, B, C>();
-    }
-
-    A a1, a2;
-    a1.a = 1;
-    a1.b = 2;
-    a1.c = 3;
-    a1.test = 0;
-    a1.debug = -1;
-
-    a2.a = 10;
-    a2.b = 11;
-    a2.c = 12;
-    a2.test = 0;
-    a2.debug = -1;
-
-    world->setComponentData<A>(e1, a1);
-    world->setComponentData<A>(e3, a2);
-
-    A got1 = world->getComponentData<A>(e1);
-    world->destroyEntity(e1);
-    world->createEntity<A, B, C>();
-
-    world->addSystem<TestSystem>();
-    world->createEntity<A, B, C>();
-
-    world->update();
-
-    std::cerr << "end all\n";
 
     return 0;
 }
