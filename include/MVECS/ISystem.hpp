@@ -4,25 +4,43 @@
 #include <functional>
 #include <memory>
 
-#include "World.hpp"
+#include "IComponentData.hpp"
+//#include "World.hpp"
 
 namespace mvecs
 {
+    template <typename Key, typename Common>
+    class World;
+
+// System型定義用、コンストラクタが展開される
+#define SYSTEM(SystemType, KeyType, CommonType)  \
+    SystemType()  = delete; \
+    ~SystemType() = delete; \
+    SystemType(mvecs::World<KeyType, CommonType>* const pWorld, const int executionOrder = 0) : mvecs::ISystem<KeyType, CommonType>(pWorld, executionOrder) {}
+
+    template <typename Key, typename Common>
     class ISystem
     {
     public:
+        //! デフォルトコンストラクタはdelete
+        ISystem() = delete;
+
         /**
          * @brief コンストラクタ
-         * @warning World以外での構築は危険
+         * @warning World外での構築は危険
          * @param pWorld Worldへのポインタ
          */
-        ISystem(World* const pWorld, const int executionOrder = 0);
+        ISystem(World<Key, Common>* const pWorld, const int executionOrder = 0)
+            : mpWorld(pWorld)
+            , mExecutionOrder(executionOrder)
+        {
+        }
 
         /**
          * @brief Systemが追加された時呼ばれるインタフェース
          *
          */
-        virtual void onStart() = 0;
+        virtual void onInit() = 0;
 
         /**
          * @brief Worldが更新された時呼ばれるインタフェース
@@ -46,7 +64,7 @@ namespace mvecs
         template <typename T, typename = std::enable_if_t<IsComponentDataType<T>>>
         void forEach(std::function<void(T&)> func)
         {
-            mpWorld->forEach<T>(func);
+            mpWorld->template forEach<T>(func);
         }
 
         /**
@@ -59,12 +77,37 @@ namespace mvecs
         template <typename T, typename = std::enable_if_t<IsComponentDataType<T>>>
         void forEachParallel(std::function<void(T&)> func, uint8_t threadNum = 4)
         {
-            mpWorld->forEachParallel<T>(func, threadNum);
+            mpWorld->template forEachParallel<T>(func, threadNum);
         }
 
-        template <typename... Args>
-        void forEach(std::function<void(const Args&...)>)
+        /**
+         * @brief World切り替えを通知する
+         * 
+         * @param key 切り替え先
+         * @param reset 初期化を行うかどうか
+         */
+        void change(const Key& key, bool reset = true)
         {
+            mpWorld->change(key, reset);
+        }
+
+        /**
+         * @brief Application終了を通知する
+         * 
+         */
+        void end()
+        {
+            mpWorld->dispatchEnd();
+        }
+
+        /**
+         * @brief 共有領域を取得する
+         * 
+         * @return Common& 
+         */
+        Common& common()
+        {
+            return mpWorld->common();
         }
 
         /**
@@ -72,11 +115,16 @@ namespace mvecs
          *
          * @return int 実行順序
          */
-        int getExecutionOrder() const;
+        int getExecutionOrder() const
+        {
+            return mExecutionOrder;
+        }
+
+    private:
+        //! Worldへのポインタ(SystemをWorld外で作成しないで)
+        World<Key, Common>* const mpWorld;
 
     protected:
-        //! Worldへのポインタ(SystemをWorld外で作成しないで)
-        World* const mpWorld;
         //! 実行する順序(若い順に実行される)
         int mExecutionOrder;
     };

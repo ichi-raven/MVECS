@@ -98,6 +98,12 @@ namespace mvecs
         void deallocate(const Entity& entity);
 
         /**
+         * @brief メモリ全体をクリアし、size=1にする
+         * 
+         */
+        void clear();
+
+        /**
          * @brief entityをotherのChunkに移動する
          *
          * @param other 移動先Chunk

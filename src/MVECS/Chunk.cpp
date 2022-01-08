@@ -108,6 +108,16 @@ namespace mvecs
             reallocate(mMaxEntityNum / 2);
     }
 
+    void Chunk::clear()
+    {
+        constexpr std::size_t maxEntityNum = 1;
+        mMemory.reset(new std::byte[(mArchetype.getAllTypeSize() + sizeof(std::size_t)) * maxEntityNum]);
+        mMaxEntityNum = maxEntityNum;
+
+        // ID-index部のメモリクリア
+        std::memset(mMemory.get() + mArchetype.getAllTypeSize() * maxEntityNum, 0xFF, maxEntityNum * sizeof(std::size_t));
+    }
+
     Entity Chunk::moveTo(const Entity& entity, Chunk& other)
     {
         // アクセスのオフセット
@@ -161,13 +171,13 @@ namespace mvecs
         assert(newMaxEntityNum >= mEntityNum);
 
         const auto oldMaxEntityNum = mMaxEntityNum;
-        
+
         // 新メモリ割当て
         std::byte* newMem = new std::byte[(mArchetype.getAllTypeSize() + sizeof(std::size_t)) * newMaxEntityNum];
 
         {  // データ移行
             size_t newOffset = 0, oldOffset = 0;
-            const auto&& typeCount     = mArchetype.getTypeCount();
+            const auto&& typeCount = mArchetype.getTypeCount();
             for (size_t i = 0; i < typeCount; ++i)
             {
                 const auto&& typeSize = mArchetype.getTypeSize(i);
@@ -179,7 +189,7 @@ namespace mvecs
 
             // ID-indexテーブル部
             std::memcpy(newMem + newOffset, mMemory.get() + oldOffset, sizeof(std::size_t) * oldMaxEntityNum);
-            if (oldMaxEntityNum < newMaxEntityNum)// 確保領域を増やす場合のみindex部をクリアする必要がある
+            if (oldMaxEntityNum < newMaxEntityNum)  // 確保領域を増やす場合のみindex部をクリアする必要がある
             {
                 // ID-index部の新規のメモリクリア
                 const auto&& newOffsetToIndex = (mArchetype.getAllTypeSize() * newMaxEntityNum) + (sizeof(std::size_t) * oldMaxEntityNum);
@@ -190,9 +200,9 @@ namespace mvecs
         // アドレス移行
         mMemory.reset(newMem);
         // 更新
-        if (oldMaxEntityNum > newMaxEntityNum)// 確保領域を減らす場合は次のEntityに割り当てるIDを戻す必要がある
-            mNextEntityIndex *= 0.5;// 除算より速い?
-        
+        if (oldMaxEntityNum > newMaxEntityNum)  // 確保領域を減らす場合は次のEntityに割り当てるIDを戻す必要がある
+            mNextEntityIndex *= 0.5;            // 除算より速い?
+
         mMaxEntityNum = newMaxEntityNum;
     }
 

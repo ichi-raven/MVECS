@@ -1,216 +1,137 @@
-
-//前方宣言のみ
-namespace mvecs
-{
-    template <typename Key, typename Common>
-    class Application;
-
-    template <typename Key, typename Common>
-    class Scene;
-}  // namespace mvecs
-
 #ifndef MVECS_MVECS_APPLICATION_HPP_
 #define MVECS_MVECS_APPLICATION_HPP_
 
-#include <Cutlass/Cutlass.hpp>
-#include <cassert>
-#include <exception>
-#include <functional>
-#include <iostream>
-#include <memory>
-#include <optional>
-#include <string>
 #include <unordered_map>
+#include <cassert>
 
 namespace mvecs
 {
-//自作Sceneの定義にはこれを使ってください
-//ヘッダに書けばオーバーロードすべき関数の定義はすべて完了します
-#define GEN_SCENE(SCENE_TYPE, KEY_TYPE, COMMON_TYPE)                                                                                         \
-public:                                                                                                                                      \
-    SCENE_TYPE(mvecs::Application<KEY_TYPE, COMMON_TYPE>* application, std::shared_ptr<COMMON_TYPE> Common) : IScene(application, common) {} \
-    virtual ~SCENE_TYPE() override;                                                                                                          \
-    virtual void init() override;                                                                                                            \
-    virtual void update() override;                                                                                                          \
-                                                                                                                                             \
-private:
+    template<typename Key, typename Common>
+    class World;
 
-
-    // 使うかどうかわからない
-
+    /**
+     * @brief World遷移とWorld間共有オブジェクトなどを管理する最上位存在
+     */
     template <typename Key, typename Common>
-    class IScene
+    class Application
     {
-    private:  // using宣言部
-        using Application_t = Application<Key, Common>;
-
-    public:  //メソッド宣言部
-        IScene() = delete;
-
-        IScene(
-            Application_t* application,
-            std::shared_ptr<Common> common,
-            std::shared_ptr<Cutlass::Context> context)
-            : mApplication(application)
-            , mCommon(common)
-            , mSceneChanged(false)
+    public:
+        /**
+         * @brief コンストラクタ
+         *
+         */
+        Application()
+            : mCurrent(nullptr)
+            , mEnded(false)
+            , mInitialized(false)
         {
         }
 
-        virtual ~IScene(){};
-
-        virtual void init() = 0;
-
-        virtual void update() = 0;
-
-        inline void initAll()
+        /**
+         * @brief Worldを追加する
+         *
+         * @param key キー
+         * @param world World
+         */
+        World<Key, Common>& add(const Key& key)
         {
-            init();
+            return mWorlds.emplace(key, this);
         }
 
-        inline void updateAll()
+        /**
+         * @brief 指定したWorldへの参照を取得する
+         * 
+         * @param key 
+         * @return std::unique_ptr<World<Key, Common>>& 
+         */
+        World<Key, Common>& get(const Key& key)
         {
-            update();
+            return mWorlds.at(key);
         }
 
-    protected:  //子以外呼ばなくていい
-        void changeScene(const Key& dstSceneKey, bool cachePrevScene = false)
+        /**
+         * @brief 示したキーのworldに変更する
+         *
+         * @param key worldのキー
+         * @param reset trueならworldの現在の状態を削除、falseなら保持する
+         */
+        void change(const Key& key, bool reset = true)
         {
-            mSceneChanged = true;
-            mApplication->changeScene(dstSceneKey, cachePrevScene);
+            auto&& iter = mWorlds.find(key);
+            assert(iter != mWorlds.end()|| !"invalid world key!");
+
+            if (reset)
+                mCurrent->end();
+
+            mCurrent = iter->second;
+            mCurrent->init();
         }
 
-        void exitApplication()
+        /**
+         * @brief 初期化(change呼ぶだけ)
+         * 
+         * @param key 開始するWorldのキー
+         */
+        void initialize(const Key& key)
         {
-            mApplication->dispatchEnd();
+            change(key);
+            mInitialized = true;
         }
 
-        const std::shared_ptr<Common>& getCommon() const
+        /**
+         * @brief 全体の更新を行う
+         *
+         * @return true 終了
+         * @return false 終了しない
+         */
+        void update()
+        {
+            assert(mInitialized || !"application was not initialized yet!");
+            assert(mCurrent || !"world is not registered yet!");
+
+            mCurrent->update();
+        }
+
+        /**
+         * @brief 終了する
+         *
+         */
+        void dispatchEnd()
+        {
+            mEnded = true;
+            mCurrent->end();
+            mCurrent = nullptr;
+        }
+
+        /**
+         * @brief 終了したかどうかを判定する
+         * 
+         */
+        bool ended()
+        {
+            return mEnded;
+        }
+
+        /**
+         * @brief 共有領域を取得する
+         * 
+         * @return Common& 
+         */
+        Common& common()
         {
             return mCommon;
         }
 
-    private:  //メンバ変数
-        std::shared_ptr<Common> mCommon;
-        Application_t* mApplication;  //コンストラクタにてnullptrで初期化
-
-        bool mSceneChanged;
-    };
-
-    template <typename Key, typename Common>
-    class Application
-    {
-    private:  // using宣言部
-        using Scene_t   = std::shared_ptr<IScene<Key, Common>>;
-        using Factory_t = std::function<Scene_t()>;
-
-    public:  //メソッド宣言部
-        template <typename T>
-        Application(std::string_view appName)
-            : mCommon(std::make_shared<Common>())
-            , mEndFlag(false)
-        {
-        }
-
-        Application(std::string_view appName)
-            : mCommon(std::make_shared<Common>())
-            , mEndFlag(false)
-        {
-        }
-
-        // Noncopyable, Nonmoveable
-        Application(const Application&) = delete;
-        Application& operator=(const Application&) = delete;
-        Application(Application&&)                 = delete;
-        Application& operator=(Application&&) = delete;
-
-        ~Application()
-        {
-        }
-
-        void init(const Key& firstSceneKey)
-        {
-            mFirstSceneKey = firstSceneKey;
-            mEndFlag       = false;
-
-            //開始シーンが設定されていない
-            assert(mFirstSceneKey);
-
-            mCurrent.first  = mFirstSceneKey.value();
-            mCurrent.second = mScenesFactory[mFirstSceneKey.value()]();
-        }
-
-        void update()
-        {
-            //全体更新
-            mCurrent.second->updateAll();
-        }
-
-        template <typename InheritedScene, typename = std::enable_if_t<std::is_base_of_v<IScene, InheritedScene>>>
-        void addScene(const Key& key)
-        {
-            if (mScenesFactory.find(key) != mScenesFactory.end())
-            {
-#ifdef _DEBUG
-                assert(!"this key already exist!");
-#endif  //_DEBUG
-        // release時は止めない
-                return;
-            }
-
-            mScenesFactory.emplace(
-                key,
-                [&]()
-                {
-                    auto&& m = std::make_shared<InheritedScene>(this, mCommon);
-                    m->initAll();
-
-                    return m;
-                });
-
-            if (!mFirstSceneKey)  //まだ値がなかったら
-                mFirstSceneKey = key;
-        }
-
-        void changeScene(const Key& dstSceneKey, bool cachePrevScene = false)
-        {
-            //そのシーンはない
-            assert(mScenesFactory.find(dstSceneKey) != mScenesFactory.end());
-
-            if (cachePrevScene)
-                mCache = mCurrent;
-
-            if (mCache && dstSceneKey == mCache.value().first)
-            {
-                mCurrent = mCache.value();
-                mCache   = std::nullopt;
-            }
-            else
-            {
-                mCurrent.first  = dstSceneKey;
-                mCurrent.second = mScenesFactory[dstSceneKey]();
-            }
-        }
-
-        void dispatchEnd()
-        {
-            mEndFlag = true;
-        }
-
-        bool isEndAll()
-        {
-            return mEndFlag;
-        }
-
-    public:
-        std::shared_ptr<Common> mCommon;
-
     private:
-        std::unordered_map<Key, Factory_t> mScenesFactory;
-        std::pair<Key, Scene_t> mCurrent;
-        std::optional<std::pair<Key, Scene_t>> mCache;
-        std::optional<Key> mFirstSceneKey;  // nulloptで初期化
-        bool mEndFlag;
+        using umap = std::unordered_map<Key, World<Key, Common>>;
+        umap mWorlds;
+
+        World<Key, Common>* mCurrent;
+
+        Common mCommon;
+
+        bool mEnded;
+        bool mInitialized;
     };
 }  // namespace mvecs
 

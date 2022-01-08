@@ -2,8 +2,10 @@
 #define MVECS_MVECS_WORLD_HPP_
 
 #include <algorithm>
-#include <iostream>
+#include <optional>
+#include <string>
 #include <thread>
+#include <unordered_map>
 #include <vector>
 
 #include "Chunk.hpp"
@@ -11,16 +13,21 @@
 
 namespace mvecs
 {
-    // 前方宣言(見なかったことにしてください)
+    template<typename Key, typename Common>
+    class Application;
+
+    template <typename Key, typename Common>
     class ISystem;
-    template <typename T>
-    constexpr bool IsSystemType = std::is_base_of<ISystem, T>::value;
+
+    template <typename T, typename Key, typename Common>
+    constexpr bool IsSystemType = std::is_base_of<ISystem<Key, Common>, T>::value;
 
     /**
-     * @brief Worldクラス
+     * @brief Worldクラス EntityとSystemを保持する
      * @details いわゆるScene
-     *
+     * @tparam Key Worldを一意に識別するキーの型
      */
+    template <typename Key, typename Common>
     class World
     {
     public:
@@ -28,22 +35,31 @@ namespace mvecs
          * @brief コンストラクタ
          *
          */
-        World();
+        World(Application<Key, Common>* pApplication)
+            : mIsInitialized(false)
+            , mpApplication(pApplication)
+        {
+        }
 
         /**
          * @brief デストラクタ
          *
          */
-        ~World();
+        ~World()
+        {
+            mSystems.clear();
+            mChunks.clear();
+        }
 
         /**
          * @brief Entity構築
          *
          * @tparam Args Entityが持つComponentData
-         * @return Entity 構築後のEntity
+         * @param reserveSizeIfCreatedNewChunk Chunkが新しく構築される場合に確保する容量(デフォルトで1)
+         * @return Entity 構築したEntity
          */
         template <typename... Args>
-        Entity createEntity(const std::size_t reserveSizeIfNewChunk = 1)
+        Entity createEntity(const std::size_t reserveSizeIfCreatedNewChunk = 1)
         {
             constexpr Archetype archetype = Archetype::create<Args...>();
             for (auto& e : mChunks)
@@ -52,7 +68,7 @@ namespace mvecs
                     return e.allocate();
             }
             const auto&& chunkID = genChunkID();
-            return insertChunk(Chunk::create(chunkID, archetype, reserveSizeIfNewChunk)).allocate();
+            return insertChunk(Chunk::create(chunkID, archetype, reserveSizeIfCreatedNewChunk)).allocate();
         }
 
         /**
@@ -60,7 +76,11 @@ namespace mvecs
          *
          * @param entity 破棄するEntity
          */
-        void destroyEntity(const Entity& entity);
+        void destroyEntity(const Entity& entity)
+        {
+            mChunks[findChunk(entity.getChunkID())].deallocate(entity);
+            // mChunks.find(entity.getChunkID())->second.deallocate(entity);
+        }
 
         /**
          * @brief EntityのComponentDataを書き込む
@@ -73,7 +93,7 @@ namespace mvecs
         void setComponentData(const Entity& entity, const T& value)
         {
             const auto index = findChunk(entity.getChunkID());
-            return mChunks[index].setComponentData<T>(entity, value);
+            return mChunks[index].template setComponentData<T>(entity, value);
             // mChunks.find(entity.getChunkID())->second.setComponentData<T>(entity, value);
         }
 
@@ -88,7 +108,7 @@ namespace mvecs
         T& getComponentData(const Entity& entity)
         {
             const auto index = findChunk(entity.getChunkID());
-            return mChunks[index].getComponentData<T>(entity);
+            return mChunks[index].template getComponentData<T>(entity);
             // return mChunks.find(entity.getChunkID())->second.getComponentData<T>(entity);
         }
 
@@ -97,29 +117,13 @@ namespace mvecs
          *
          * @tparam T 追加するSystemの型
          * @tparam typename System型判定用
-         * @return std::size_t SystemのID
          */
-        template <typename T, typename = std::is_base_of<ISystem, T>>
-        std::size_t addSystem()
+        template <typename T, typename = std::is_base_of<ISystem<Key, Common>, T>>
+        void addSystem()
         {
-            auto&& systemID = genSystemID();
-            // startSystemImpl(mSystems.insert(std::move(std::make_pair(systemID, std::move(std::make_unique<T>(this))))).first->second);
-            startSystemImpl(insertSystem(std::make_unique<T>(this)));
-            return systemID;
+            // mSystems.insert(std::move(std::make_pair(systemID, std::move(std::make_unique<T>(this)))).first->second);
+            insertSystem(std::make_unique<T>(this));
         }
-
-        /**
-         * @brief Systemを取り除く
-         *
-         * @param systemID 取り除くSystemのID
-         */
-        // void removeSystem(std::size_t systemID);
-
-        /**
-         * @brief 全てのSystemを削除する
-         *
-         */
-        void clearSystem();
 
         /**
          * @brief 指定された全てのComponentData型に対してforeachを行う
@@ -183,32 +187,83 @@ namespace mvecs
         }
 
         /**
-         * @brief 更新を行う
+         * @brief ISystem::onInit()を呼ぶ
          *
          */
-        void update();
+        void init()
+        {
+            for (auto& system : mSystems)
+                // system.second->onUpdate();
+                system->onInit();
+            mIsInitialized = true;
+        }
+
+        /**
+         * @brief ISystem::onUpdate()を呼ぶ
+         *
+         */
+        void update()
+        {
+            for (auto& system : mSystems)
+                // system.second->onUpdate();
+                system->onUpdate();
+        }
+
+        /**
+         * @brief ISystem::onEnd()を呼ぶ
+         *
+         */
+        void end()
+        {
+            for (auto& system : mSystems)
+                // system.second->onUpdate();
+                system->onEnd();
+            
+            for (auto& chunk : mChunks)
+                chunk.clear();
+        }
+
+        /**
+         * @brief World切り替えを通知する
+         * 
+         * @param key 切り替え先
+         * @param reset 初期化を行うかどうか
+         */
+        void change(const Key& key, bool reset = true)
+        {
+            mpApplication->change(key, reset);
+        }
+
+        /**
+         * @brief Application終了を通知する
+         * 
+         */
+        void dispatchEnd()
+        {
+            mpApplication->dispatchEnd();
+        }
+
+        /**
+         * @brief 共有領域を取得する
+         * 
+         * @return Common& 
+         */
+        Common& common()
+        {
+            return mpApplication->common();
+        }
 
     private:
-        /**
-         * @brief ISystem->onStart()を実行する
-         * @details 循環インクルード回避のため
-         * @param index ISystemの添字
-         */
-        void startSystemImpl(const std::unique_ptr<ISystem>& system);
-
         /**
          * @brief ChunkのIDを生成する
          *
          * @return std::size_t 生成されたID
          */
-        static std::size_t genChunkID();
-
-        /**
-         * @brief SystemのIDを生成する
-         *
-         * @return std::size_t 生成されたID
-         */
-        static std::size_t genSystemID();
+        static std::size_t genChunkID()
+        {
+            static std::size_t chunkID = 0;
+            return chunkID++;
+        }
 
         /**
          * @brief Chunkをvectorに挿入する(常にソートする)
@@ -216,7 +271,22 @@ namespace mvecs
          * @param chunk
          * @return Chunk&
          */
-        Chunk& insertChunk(Chunk&& chunk);
+        Chunk& insertChunk(Chunk&& chunk)
+        {
+            // mChunks.emplace_back(std::move(chunk));
+            // return mChunks.back();
+
+            auto itr = std::lower_bound(mChunks.begin(), mChunks.end(), chunk, [](const Chunk& left, const Chunk& right)
+                                        { return left.getID() < right.getID(); });
+            if (itr == mChunks.end())
+            {
+                mChunks.emplace_back(std::move(chunk));
+                itr = --mChunks.end();
+            }
+            else
+                mChunks.insert(itr, std::move(chunk));
+            return *itr;
+        }
 
         /**
          * @brief ChunkIDに対応するChunkを二分探索する
@@ -224,7 +294,28 @@ namespace mvecs
          * @param chunkID
          * @return std::size_t 対応するChunkの添字
          */
-        std::size_t findChunk(std::size_t chunkID);
+        std::size_t findChunk(std::size_t chunkID)
+        {
+            // for (std::size_t i = 0; i < mChunks.size(); ++i)
+            //     if (mChunks[i].getID() == chunkID)
+            //         return i;
+
+            auto lower = mChunks.begin();
+            auto upper = mChunks.end() - 1;
+            while (lower <= upper)
+            {
+                auto mid = lower + (upper - lower) / 2;
+                if (chunkID == mid->getID())
+                    return std::distance(mChunks.begin(), mid);
+                else if (chunkID < mid->getID())
+                    upper = mid - 1;
+                else
+                    lower = mid + 1;
+            }
+
+            assert(!"chunk was not found!");
+            return std::numeric_limits<std::size_t>::max();
+        }
 
         /**
          * @brief systemをvectorに挿入する(常にソートする)
@@ -232,14 +323,37 @@ namespace mvecs
          * @param system
          * @return std::unique_ptr<ISystem>&
          */
-        std::unique_ptr<ISystem>& insertSystem(std::unique_ptr<ISystem>&& system);
+        std::unique_ptr<ISystem<Key, Common>>& insertSystem(std::unique_ptr<ISystem<Key, Common>>&& system)
+        {
+            auto itr = std::lower_bound(mSystems.begin(), mSystems.end(), system, [](const std::unique_ptr<ISystem<Key, Common>>& left, const std::unique_ptr<ISystem<Key, Common>>& right)
+                                        { return left->getExecutionOrder() < right->getExecutionOrder(); });
+            if (itr == mSystems.end())
+            {
+                mSystems.emplace_back(std::move(system));
+                itr = --mSystems.end();
+            }
+            else
+                mSystems.insert(itr, std::move(system));
+
+            if (mIsInitialized)
+                (*itr)->onInit();
+
+            return *itr;
+        }
+
+        //! Applicationのポインタ
+        Application<Key, Common>* mpApplication;
 
         //! Chunkたち
         std::vector<Chunk> mChunks;
 
         //! Systemたち
-        std::vector<std::unique_ptr<ISystem>> mSystems;
+        std::vector<std::unique_ptr<ISystem<Key, Common>>> mSystems;
+
+        //! すでにinitされたかどうか これによってSystem追加時にinitするかどうか決まる
+        bool mIsInitialized;
     };
+
 }  // namespace mvecs
 
 #endif
