@@ -13,9 +13,10 @@ namespace mvecs
     class World;
 
 // System型定義用、コンストラクタが展開される
-#define SYSTEM(SystemType, KeyType, CommonType)  \
-    SystemType()  = delete; \
-    ~SystemType() = delete; \
+#define SYSTEM(SystemType, KeyType, CommonType) \
+public:                                         \
+    SystemType()  = delete;                     \
+    ~SystemType() = delete;                     \
     SystemType(mvecs::World<KeyType, CommonType>* const pWorld, const int executionOrder = 0) : mvecs::ISystem<KeyType, CommonType>(pWorld, executionOrder) {}
 
     template <typename Key, typename Common>
@@ -37,7 +38,7 @@ namespace mvecs
         }
 
         /**
-         * @brief Systemが追加された時呼ばれるインタフェース
+         * @brief World初期化時 or Systemが追加された時に呼ばれるインタフェース
          *
          */
         virtual void onInit() = 0;
@@ -82,7 +83,7 @@ namespace mvecs
 
         /**
          * @brief World切り替えを通知する
-         * 
+         *
          * @param key 切り替え先
          * @param reset 初期化を行うかどうか
          */
@@ -93,7 +94,7 @@ namespace mvecs
 
         /**
          * @brief Application終了を通知する
-         * 
+         *
          */
         void end()
         {
@@ -102,8 +103,8 @@ namespace mvecs
 
         /**
          * @brief 共有領域を取得する
-         * 
-         * @return Common& 
+         *
+         * @return Common&
          */
         Common& common()
         {
