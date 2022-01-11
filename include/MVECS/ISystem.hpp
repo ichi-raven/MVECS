@@ -5,6 +5,7 @@
 #include <memory>
 
 #include "IComponentData.hpp"
+#include "Entity.hpp"
 //#include "World.hpp"
 
 namespace mvecs
@@ -82,6 +83,66 @@ public:                                         \
         }
 
         /**
+         * @brief Entity構築
+         *
+         * @tparam Args Entityが持つComponentData
+         * @param reserveSizeIfCreatedNewChunk Chunkが新しく構築される場合に確保する容量(デフォルトで1)
+         * @return Entity 構築したEntity
+         */
+        template <typename... Args>
+        Entity createEntity(const std::size_t reserveSizeIfCreatedNewChunk = 1)
+        {
+            mpWorld->template createEntity<Args...>(reserveSizeIfCreatedNewChunk);
+        }
+
+        /**
+         * @brief Entityを破棄する
+         *
+         * @param entity 破棄するEntity
+         */
+        void destroyEntity(const Entity& entity)
+        {
+            mpWorld->destroyEntity(entity);
+        }
+
+        /**
+         * @brief EntityのComponentDataを書き込む
+         *
+         * @tparam T 書き込むComponentDataの型
+         * @param entity 書き込み先Entity
+         * @param value 書き込む値
+         */
+        template <typename T>
+        void setComponentData(const Entity& entity, const T& value)
+        {
+            mpWorld->template setComponentData<T>(entity, value);
+        }
+
+        /**
+         * @brief EntityのComponentDataを取得する
+         *
+         * @tparam T ComponentDataの型
+         * @param entity 取得先Entity
+         * @return 取得したComponentDataの値
+         */
+        template <typename T>
+        T& getComponentData(const Entity& entity)
+        {
+            return mpWorld->template getComponentData<T>(entity);
+        }
+
+        /**
+         * @brief Systemを追加する
+         *
+         * @tparam T 追加するSystemの型
+         * @tparam typename System型判定用
+         */
+        template <typename T, typename = std::is_base_of<ISystem<Key, Common>, T>>
+        void addSystem()
+        {
+            mpWorld->template addSystem<T>();
+        }
+        /**
          * @brief World切り替えを通知する
          *
          * @param key 切り替え先
@@ -96,7 +157,7 @@ public:                                         \
          * @brief Application終了を通知する
          *
          */
-        void end()
+        void endAll()
         {
             mpWorld->dispatchEnd();
         }
