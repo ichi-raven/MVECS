@@ -33,7 +33,7 @@ namespace mvecs
         static Chunk create(const std::size_t ID, const Archetype& archetype, const std::size_t maxEntityNum = 1)
         {
             Chunk rtn(ID, archetype);
-            rtn.mMemory       = std::unique_ptr<std::byte>(new std::byte[(archetype.getAllTypeSize() + sizeof(std::size_t)) * maxEntityNum]);
+            rtn.mMemory       = std::unique_ptr<std::byte>(new std::byte[(archetype.getAllTypeSize() + sizeof(std::size_t)) * maxEntityNum]());
             rtn.mMaxEntityNum = maxEntityNum;
             assert(rtn.mMaxEntityNum != 0);
 
@@ -128,7 +128,7 @@ namespace mvecs
             assert(index != std::numeric_limits<size_t>::max() || !"this entity was not allocated!");
 
             // 書き込む型までのオフセット
-            std::size_t offset = mArchetype.getTypeOffset(mArchetype.getTypeIndex<T>(), mMaxEntityNum);
+            const std::size_t offset = mArchetype.getTypeOffset(mArchetype.getTypeIndex<T>(), mMaxEntityNum);
 
             // 書き込み
             std::memcpy(mMemory.get() + offset + index * sizeof(T), &value, sizeof(T));

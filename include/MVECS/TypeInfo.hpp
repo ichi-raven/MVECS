@@ -72,6 +72,52 @@ namespace mvecs
         {
             return ((count ? fnv1a_32(s, count - 1) : 2166136261u) ^ s[count]) * 16777619u;
         }
+
+        /**
+         * @brief checkSynonymの内部実装, 直接使う意味はありません
+         * 
+         * @tparam size 
+         * @tparam Head 
+         * @tparam Tails 
+         * @param table 
+         * @param now 
+         * @return true 
+         * @return false 
+         */
+        template <std::size_t size, typename Head, typename... Tails>
+        bool checkSynonymImpl(std::array<std::uint32_t, size>& table, std::size_t now)
+        {
+            assert(TypeBinding::HasTypeInfoValue<Head> || !"this type does not have a type info!");
+            if (now >= size - 1)
+                return false;
+
+            uint32_t&& hash = Head::getTypeHash();
+            for (std::size_t i = 0; i < now; ++i)
+                if (table[i] == hash)
+                    return true;
+            
+            table[now] = hash;
+
+            if (sizeof...(Tails) != 0)
+                return checkSynonymImpl<Tails...>(table, now + 1);
+            else 
+                return false;
+        }
+        
+        /**
+         * @brief TypeInfoを持つ型のハッシュ値同士が衝突していないかをチェックする(低確率だが一応)
+         * 
+         * @tparam Args 型たち
+         * @return true 衝突している(注意)
+         * @return false 衝突していない
+         */
+        template <typename... Args>
+        bool checkSynonym()
+        {
+            std::array<std::uint32_t, sizeof...(Args)> table;
+            return checkSynonymImpl<sizeof...(Args), Args...>(table, 0);
+        }
+
     }  // namespace CompileTimeHash
 
     /**
