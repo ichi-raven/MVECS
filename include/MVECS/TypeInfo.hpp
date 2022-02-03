@@ -115,6 +115,7 @@ namespace mvecs
         bool checkSynonym()
         {
             std::array<std::uint32_t, sizeof...(Args)> table;
+            
             return checkSynonymImpl<sizeof...(Args), Args...>(table, 0);
         }
 

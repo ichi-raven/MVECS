@@ -14,6 +14,10 @@ namespace mvecs
     {
     }
 
+    Chunk::~Chunk()
+    {
+    }
+
     Chunk::Chunk(Chunk&& src)
         : mID(src.mID)
         , mArchetype(src.mArchetype)
@@ -201,7 +205,7 @@ namespace mvecs
         mMemory.reset(newMem);
         // 更新
         if (oldMaxEntityNum > newMaxEntityNum)  // 確保領域を減らす場合は次のEntityに割り当てるIDを戻す必要がある
-            mNextEntityIndex *= 0.5;            // 除算より速い?
+            mNextEntityIndex /= 2;
 
         mMaxEntityNum = newMaxEntityNum;
     }

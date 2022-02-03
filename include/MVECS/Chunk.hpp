@@ -50,8 +50,25 @@ namespace mvecs
          */
         Chunk(const std::size_t ID, const Archetype& archetype);
 
+        /**
+         * @brief デストラクタ
+         * 
+         */
+        ~Chunk();
+
+        /**
+         * @brief コピーコンストラクタはdelete
+         * 
+         * @param src 
+         */
         Chunk(Chunk& src) = delete;
 
+        /**
+         * @brief 代入によるコピーもdelete
+         * 
+         * @param src 
+         * @return Chunk& 
+         */
         Chunk& operator=(const Chunk& src) = delete;
 
         /**

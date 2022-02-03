@@ -187,7 +187,7 @@ public:                                         \
         World<Key, Common>* const mpWorld;
 
     protected:
-        //! 実行する順序(若い順に実行される)
+        //! 実行する順序(小さい順に実行される)
         int mExecutionOrder;
     };
 
