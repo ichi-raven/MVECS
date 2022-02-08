@@ -210,6 +210,11 @@ namespace mvecs
         mMaxEntityNum = newMaxEntityNum;
     }
 
+    std::size_t Chunk::getEntityNum() const
+    {
+        return mEntityNum;
+    }
+
     void Chunk::dumpMemory() const
     {
         const std::byte* const p = mMemory.get();

@@ -199,6 +199,13 @@ namespace mvecs
         }
 
         /**
+         * @brief 現在のEntityの個数を取得する
+         * 
+         * @return std::size_t 個数
+         */
+        std::size_t getEntityNum() const;
+
+        /**
          * @brief メモリダンプ
          *
          */

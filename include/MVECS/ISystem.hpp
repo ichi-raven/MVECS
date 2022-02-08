@@ -70,6 +70,18 @@ public:                                         \
         }
 
         /**
+         * @brief 複数のComponentData型に対するforEach
+         * @warning 指定したComponentData型をすべて含むChunk(Entity)しか巡回されない
+         * @tparam Args 
+         * @param func 
+         */
+        template <typename... Args>
+        void forEach(const std::function<void(Args&...)>& func)
+        {
+            mpWorld->template forEach<Args...>();
+        }
+
+        /**
          * @brief forEachを並列実行する
          * @warning funcはthread-safeであること
          * @tparam T Component型

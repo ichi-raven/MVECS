@@ -19,6 +19,13 @@ namespace mvecs
     class ComponentArray
     {
     public:
+        //! iterator型の定義
+        using iterator         = T*;
+        //! const_iterator型の定義
+        using const_iterator   = const T*;
+        //! reverse_iterator型の定義
+        using reverse_iterator = std::reverse_iterator<iterator>;
+
         /**
          * @brief コンストラクタ
          *
@@ -53,6 +60,72 @@ namespace mvecs
         std::size_t size()
         {
             return mSize;
+        }
+
+        /**
+         * @brief 先頭イテレータを取得する
+         * 
+         * @return iterator 
+         */
+        iterator begin() noexcept
+        {
+            assert(mAddress);
+            return mAddress;
+        }
+
+        /**
+         * @brief 終端イテレータを取得する
+         * 
+         * @return iterator 
+         */
+        iterator end() noexcept
+        {
+            assert(mAddress);
+            return mAddress + mSize;
+        }
+
+        /**
+         * @brief const先頭イテレータを取得する
+         * 
+         * @return const_iterator 
+         */
+        const_iterator cbegin() const noexcept
+        {
+            assert(mAddress);
+            return mAddress;
+        }
+
+        /**
+         * @brief const終端イテレータを取得する
+         * 
+         * @return const_iterator 
+         */
+        const_iterator cend() const noexcept
+        {
+            assert(mAddress);
+            return mAddress + mSize;
+        }
+
+        /**
+         * @brief 逆先頭イテレータを取得する
+         * 
+         * @return reverse_iterator 
+         */
+        reverse_iterator rbegin() noexcept
+        {
+            assert(mAddress);
+            return reverse_iterator{mAddress + mSize};
+        }
+
+        /**
+         * @brief 逆終端イテレータを取得する
+         * 
+         * @return reverse_iterator 
+         */
+        reverse_iterator rend() noexcept
+        {
+            assert(mAddress);
+            return reverse_iterator{mAddress};
         }
 
     private:

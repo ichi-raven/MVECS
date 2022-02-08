@@ -13,7 +13,7 @@
 
 namespace mvecs
 {
-    template<typename Key, typename Common>
+    template <typename Key, typename Common>
     class Application;
 
     template <typename Key, typename Common>
@@ -67,8 +67,8 @@ namespace mvecs
                 if (e.getArchetype() == archetype)
                     return e.allocate();
             }
-            const auto&& chunkID = genChunkID();
-            return insertChunk(Chunk::create(chunkID, archetype, reserveSizeIfCreatedNewChunk)).allocate();
+
+            return insertChunk(Chunk::create(genChunkID(), archetype, reserveSizeIfCreatedNewChunk)).allocate();
         }
 
         /**
@@ -126,7 +126,7 @@ namespace mvecs
         }
 
         /**
-         * @brief 指定された全てのComponentData型に対してforeachを行う
+         * @brief 指定された全てのComponentData型に対してfor_eachを行う
          *
          * @tparam T
          * @param func 実行する関数オブジェクト
@@ -134,48 +134,63 @@ namespace mvecs
         template <typename T, typename = std::enable_if_t<IsComponentDataType<T>>>
         void forEach(const std::function<void(T&)>& func)
         {
-            // ComponentArray作成
-            std::vector<ComponentArray<T>> componentArrays;
-            componentArrays.reserve(mChunks.size() / 2);
             for (auto& chunk : mChunks)
                 if (chunk.getArchetype().isIn<T>())
-                    componentArrays.emplace_back(chunk.getComponentArray<T>());
+                    for (auto& component : chunk.getComponentArray<T>())
+                        func(component);
+        }
 
-            // 実行
-            for (auto& componentArray : componentArrays)
-                for (std::size_t j = 0; j < componentArray.size(); ++j)
-                    func(componentArray[j]);
+        /**
+         * @brief 複数のComponentData型に対するforEach
+         * @warning 指定したComponentData型をすべて含むChunk(Entity)しか巡回されない
+         * @tparam Args 
+         * @param func 
+         */
+        template <typename... Args>
+        void forEach(const std::function<void(Args&...)>& func)
+        {
+            assert(sizeof...(Args) != 0 || !"empty type to forEach!");
+
+            constexpr Archetype targetArchetype = Archetype::create<Args...>();
+
+            for (auto& chunk : mChunks)
+                if (chunk.getArchetype().isIn(targetArchetype))
+                    for (std::size_t i = 0; i < chunk.getEntityNum(); ++i)
+                        func(chunk.getComponentArray<Args>()[i]...);
         }
 
         /**
          * @brief forEachを並列実行する
          * @warning funcはthread-safeであること
-         * @tparam T
-         * @param func
+         * 
+         * @tparam T 実行するComponentData型
+         * @tparam ThreadNum スレッド数(デフォルトで4)
+         * @tparam typename ComponentData型判定
+         * @param func 
          */
-        template <typename T, typename = std::enable_if_t<IsComponentDataType<T>>>
-        void forEachParallel(const std::function<void(T&)>& func, const uint8_t threadNum = 4)
+        template <typename T, std::size_t ThreadNum = 4, typename = std::enable_if_t<IsComponentDataType<T>>>
+        void forEachParallel(const std::function<void(T&)>& func)
         {
             // ComponentArray作成
             std::vector<ComponentArray<T>> componentArrays;
-            componentArrays.reserve(mChunks.size() / 2);
+            const auto&& reserveSize = mChunks.size() / 4;
+            componentArrays.reserve(reserveSize < 1 ? 1 : reserveSize);
             for (auto& chunk : mChunks)
                 if (chunk.getArchetype().isIn<T>())
                     componentArrays.emplace_back(chunk.getComponentArray<T>());
 
             // 実行
-            std::vector<std::thread> threads;
-            threads.resize(threadNum);
-            for (uint8_t i = 0; i < threadNum; ++i)
+            std::array<std::thread, ThreadNum> threads;
+            for (uint8_t i = 0; i < ThreadNum; ++i)
             {
                 threads[i] = std::thread(
-                    [i, threadNum, &componentArrays, &func]()
+                    [i, &componentArrays, &func]()
                     {
                         std::size_t start = 0, end = 0;
                         for (auto& componentArray : componentArrays)
                         {
-                            start = i * componentArray.size() / threadNum;
-                            end   = (i + 1) * componentArray.size() / threadNum;
+                            start = i * componentArray.size() / ThreadNum;
+                            end   = (i + 1) * componentArray.size() / ThreadNum;
                             for (std::size_t j = start; j < end; ++j)
                                 func(componentArray[j]);
                         }
@@ -218,14 +233,14 @@ namespace mvecs
             for (auto& system : mSystems)
                 // system.second->onUpdate();
                 system->onEnd();
-            
+
             for (auto& chunk : mChunks)
                 chunk.clear();
         }
 
         /**
          * @brief World切り替えを通知する
-         * 
+         *
          * @param key 切り替え先
          * @param reset 初期化を行うかどうか
          */
@@ -236,7 +251,7 @@ namespace mvecs
 
         /**
          * @brief Application終了を通知する
-         * 
+         *
          */
         void dispatchEnd()
         {
@@ -245,8 +260,8 @@ namespace mvecs
 
         /**
          * @brief 共有領域を取得する
-         * 
-         * @return Common& 
+         *
+         * @return Common&
          */
         Common& common()
         {
@@ -254,6 +269,7 @@ namespace mvecs
         }
 
     private:
+
         /**
          * @brief ChunkのIDを生成する
          *
@@ -276,7 +292,7 @@ namespace mvecs
             // mChunks.emplace_back(std::move(chunk));
             // return mChunks.back();
 
-            auto itr = std::lower_bound(mChunks.begin(), mChunks.end(), chunk, [](const Chunk& left, const Chunk& right)
+            auto&& itr = std::lower_bound(mChunks.begin(), mChunks.end(), chunk, [](const Chunk& left, const Chunk& right)
                                         { return left.getID() < right.getID(); });
             if (itr == mChunks.end())
             {
