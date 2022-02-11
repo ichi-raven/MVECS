@@ -155,8 +155,11 @@ namespace mvecs
 
             for (auto& chunk : mChunks)
                 if (chunk.getArchetype().isIn(targetArchetype))
+                {
+                    auto&& tuple = std::make_tuple(chunk.getComponentArray<Args>()...);
                     for (std::size_t i = 0; i < chunk.getEntityNum(); ++i)
-                        func(chunk.getComponentArray<Args>()[i]...);
+                        func(std::get<ComponentArray<Args>>(tuple)[i]...);
+                }
         }
 
         /**
