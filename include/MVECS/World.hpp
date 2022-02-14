@@ -126,6 +126,17 @@ namespace mvecs
         }
 
         /**
+         * @brief 複数System型をまとめて追加する
+         * 
+         * @tparam Args System型たち
+         */
+        template <typename... Args>
+        void addSystems()
+        {
+            addSystemsImpl<Args...>();
+        }
+
+        /**
          * @brief 指定された全てのComponentData型に対してfor_eachを行う
          *
          * @tparam T
@@ -358,6 +369,22 @@ namespace mvecs
                 (*itr)->onInit();
 
             return *itr;
+        }
+
+        /**
+         * @brief 複数System追加の実装部
+         * 
+         * @tparam Head 先頭System型
+         * @tparam Tail 残りのSystem型
+         * @tparam typename System型判定用
+         */
+        template<typename Head, typename... Tail, typename = std::is_base_of<ISystem<Key, Common>, Head>>
+        void addSystemsImpl()
+        {
+            addSystem<Head>();
+
+            if constexpr (sizeof...(Tail) != 0)
+                addSystemsImpl<Tail...>();
         }
 
         //! Applicationのポインタ
