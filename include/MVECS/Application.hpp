@@ -35,7 +35,7 @@ namespace mvecs
          */
         World<Key, Common>& add(const Key& key)
         {
-            return mWorlds.emplace(key, this);
+            return *mWorlds.emplace(key, this).first.second;
         }
 
         /**

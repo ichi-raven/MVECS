@@ -6,7 +6,6 @@
 
 #include "IComponentData.hpp"
 #include "Entity.hpp"
-//#include "World.hpp"
 
 namespace mvecs
 {
@@ -64,7 +63,7 @@ public:                                         \
          * @param func 実行する関数オブジェクト
          */
         template <typename T, typename = std::enable_if_t<IsComponentDataType<T>>>
-        void forEach(std::function<void(T&)> func)
+        void forEach(const std::function<void(T&)>& func)
         {
             mpWorld->template forEach<T>(func);
         }
@@ -89,7 +88,7 @@ public:                                         \
          * @param func 実行する関数オブジェクト
          */
         template <typename T, typename = std::enable_if_t<IsComponentDataType<T>>>
-        void forEachParallel(std::function<void(T&)> func, uint8_t threadNum = 4)
+        void forEachParallel(const std::function<void(T&)>& func, uint8_t threadNum = 4)
         {
             mpWorld->template forEachParallel<T>(func, threadNum);
         }
