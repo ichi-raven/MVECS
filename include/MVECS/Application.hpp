@@ -1,12 +1,13 @@
 #ifndef MVECS_MVECS_APPLICATION_HPP_
 #define MVECS_MVECS_APPLICATION_HPP_
 
-#include <unordered_map>
 #include <cassert>
+#include <iostream>
+#include <unordered_map>
 
 namespace mvecs
 {
-    template<typename Key, typename Common>
+    template <typename Key, typename Common>
     class World;
 
     /**
@@ -35,14 +36,14 @@ namespace mvecs
          */
         World<Key, Common>& add(const Key& key)
         {
-            return *mWorlds.emplace(key, this).first;
+            return (*mWorlds.emplace(key, this).first).second;
         }
 
         /**
          * @brief 指定したWorldへの参照を取得する
-         * 
-         * @param key 
-         * @return std::unique_ptr<World<Key, Common>>& 
+         *
+         * @param key
+         * @return World<Key, Common>&
          */
         World<Key, Common>& get(const Key& key)
         {
@@ -58,18 +59,18 @@ namespace mvecs
         void change(const Key& key, bool reset = true)
         {
             auto&& iter = mWorlds.find(key);
-            assert(iter != mWorlds.end()|| !"invalid world key!");
+            assert(iter != mWorlds.end() || !"invalid world key!");
 
-            if (reset)
+            if (reset && mInitialized)
                 mCurrent->end();
 
-            mCurrent = iter->second;
+            mCurrent = &(iter->second);
             mCurrent->init();
         }
 
         /**
          * @brief 初期化(change呼ぶだけ)
-         * 
+         *
          * @param key 開始するWorldのキー
          */
         void initialize(const Key& key)
@@ -90,6 +91,12 @@ namespace mvecs
             assert(mCurrent || !"world is not registered yet!");
 
             mCurrent->update();
+            
+            if (mEnded)
+            {
+                mCurrent->end();
+                mCurrent = nullptr;
+            }
         }
 
         /**
@@ -99,13 +106,11 @@ namespace mvecs
         void dispatchEnd()
         {
             mEnded = true;
-            mCurrent->end();
-            mCurrent = nullptr;
         }
 
         /**
          * @brief 終了したかどうかを判定する
-         * 
+         *
          */
         bool ended()
         {
@@ -114,8 +119,8 @@ namespace mvecs
 
         /**
          * @brief 共有領域を取得する
-         * 
-         * @return Common& 
+         *
+         * @return Common&
          */
         Common& common()
         {

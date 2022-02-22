@@ -6,17 +6,18 @@
 
 #include "IComponentData.hpp"
 #include "Entity.hpp"
+#include "World.hpp"
+#include "Application.hpp"
 
 namespace mvecs
 {
-    template <typename Key, typename Common>
-    class World;
+    // template <typename Key, typename Common>
+    // class World;
 
 // System型定義用、コンストラクタが展開される
 #define SYSTEM(SystemType, KeyType, CommonType) \
 public:                                         \
     SystemType()  = delete;                     \
-    ~SystemType() = delete;                     \
     SystemType(mvecs::World<KeyType, CommonType>* const pWorld, const int executionOrder = 0) : mvecs::ISystem<KeyType, CommonType>(pWorld, executionOrder) {}
 
     template <typename Key, typename Common>
@@ -62,7 +63,7 @@ public:                                         \
          * @tparam typename ComponentData判定用
          * @param func 実行する関数オブジェクト
          */
-        template <typename T, typename = std::enable_if_t<IsComponentDataType<T>>>
+        template <typename T>
         void forEach(const std::function<void(T&)>& func)
         {
             mpWorld->template forEach<T>(func);
@@ -77,7 +78,7 @@ public:                                         \
         template <typename... Args>
         void forEach(const std::function<void(Args&...)>& func)
         {
-            mpWorld->template forEach<Args...>();
+            mpWorld->template forEach<Args...>(func);
         }
 
         /**
@@ -153,6 +154,7 @@ public:                                         \
         {
             mpWorld->template addSystem<T>();
         }
+        
         /**
          * @brief World切り替えを通知する
          *

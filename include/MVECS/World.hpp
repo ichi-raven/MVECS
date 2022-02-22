@@ -127,7 +127,7 @@ namespace mvecs
 
         /**
          * @brief 複数System型をまとめて追加する
-         * 
+         *
          * @tparam Args System型たち
          */
         template <typename... Args>
@@ -142,7 +142,7 @@ namespace mvecs
          * @tparam T
          * @param func 実行する関数オブジェクト
          */
-        template <typename T, typename = std::enable_if_t<IsComponentDataType<T>>>
+        template <typename T, typename = std::enable_if<IsComponentDataType<T>>>
         void forEach(const std::function<void(T&)>& func)
         {
             for (auto& chunk : mChunks)
@@ -154,8 +154,8 @@ namespace mvecs
         /**
          * @brief 複数のComponentData型に対するforEach
          * @warning 指定したComponentData型をすべて含むChunk(Entity)しか巡回されない
-         * @tparam Args 
-         * @param func 
+         * @tparam Args
+         * @param func
          */
         template <typename... Args>
         void forEach(const std::function<void(Args&...)>& func)
@@ -176,11 +176,11 @@ namespace mvecs
         /**
          * @brief forEachを並列実行する
          * @warning funcはthread-safeであること
-         * 
+         *
          * @tparam T 実行するComponentData型
          * @tparam ThreadNum スレッド数(デフォルトで4)
          * @tparam typename ComponentData型判定
-         * @param func 
+         * @param func
          */
         template <typename T, std::size_t ThreadNum = 4, typename = std::enable_if_t<IsComponentDataType<T>>>
         void forEachParallel(const std::function<void(T&)>& func)
@@ -224,6 +224,7 @@ namespace mvecs
             for (auto& system : mSystems)
                 // system.second->onUpdate();
                 system->onInit();
+
             mIsInitialized = true;
         }
 
@@ -236,6 +237,11 @@ namespace mvecs
             for (auto& system : mSystems)
                 // system.second->onUpdate();
                 system->onUpdate();
+
+            //std::cout << "debug--------\n";
+            // for (const auto& chunk : mChunks)
+            //     std::cout << chunk.getArchetype().getTypeCount() << "\n";
+            //std::cout << "-------------\n";
         }
 
         /**
@@ -283,7 +289,6 @@ namespace mvecs
         }
 
     private:
-
         /**
          * @brief ChunkのIDを生成する
          *
@@ -307,7 +312,7 @@ namespace mvecs
             // return mChunks.back();
 
             auto&& itr = std::lower_bound(mChunks.begin(), mChunks.end(), chunk, [](const Chunk& left, const Chunk& right)
-                                        { return left.getID() < right.getID(); });
+                                          { return left.getID() < right.getID(); });
             if (itr == mChunks.end())
             {
                 mChunks.emplace_back(std::move(chunk));
@@ -373,12 +378,12 @@ namespace mvecs
 
         /**
          * @brief 複数System追加の実装部
-         * 
+         *
          * @tparam Head 先頭System型
          * @tparam Tail 残りのSystem型
          * @tparam typename System型判定用
          */
-        template<typename Head, typename... Tail, typename = std::is_base_of<ISystem<Key, Common>, Head>>
+        template <typename Head, typename... Tail, typename = std::is_base_of<ISystem<Key, Common>, Head>>
         void addSystemsImpl()
         {
             addSystem<Head>();
