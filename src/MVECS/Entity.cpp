@@ -2,15 +2,15 @@
 
 namespace mvecs
 {
-    Entity::Entity(std::size_t ID, std::size_t chunkID)
-        : mID(ID)
+    Entity::Entity(std::size_t* pID, std::size_t chunkID)
+        : mpID(pID)
         , mChunkID(chunkID)
     {
     }
 
     std::size_t Entity::getID() const
     {
-        return mID;
+        return *mpID;
     }
 
     std::size_t Entity::getChunkID() const

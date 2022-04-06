@@ -11,10 +11,8 @@
 
 namespace mvecs
 {
-    // template <typename Key, typename Common>
-    // class World;
 
-// System型定義用、コンストラクタが展開される
+///! System型定義用、コンストラクタが展開される
 #define SYSTEM(SystemType, KeyType, CommonType) \
 public:                                         \
     SystemType()  = delete;                     \
@@ -35,6 +33,7 @@ public:                                         \
         ISystem(World<Key, Common>* const pWorld, const int executionOrder = 0)
             : mpWorld(pWorld)
             , mExecutionOrder(executionOrder)
+            , mRemoveThisSystem(false)
         {
         }
 
@@ -150,11 +149,16 @@ public:                                         \
          * @tparam typename System型判定用
          */
         template <typename T, typename = std::is_base_of<ISystem<Key, Common>, T>>
-        void addSystem()
+        void addSystem(int executionOrder = 0)
         {
-            mpWorld->template addSystem<T>();
+            mpWorld->template addSystem<T>(executionOrder);
         }
-        
+
+        bool removeThis()
+        {
+            return mRemoveThisSystem;
+        }
+
         /**
          * @brief World切り替えを通知する
          *
@@ -202,6 +206,8 @@ public:                                         \
     protected:
         //! 実行する順序(小さい順に実行される)
         int mExecutionOrder;
+        //! trueの時、このSystemは削除される
+        bool mRemoveThisSystem;
     };
 
 }  // namespace mvecs

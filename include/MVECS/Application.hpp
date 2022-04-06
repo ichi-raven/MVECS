@@ -73,7 +73,7 @@ namespace mvecs
          *
          * @param key 開始するWorldのキー
          */
-        void initialize(const Key& key)
+        void start(const Key& key)
         {
             change(key);
             mInitialized = true;

@@ -36,7 +36,7 @@ namespace mvecs
          *
          */
         World(Application<Key, Common>* pApplication)
-            : mIsInitialized(false)
+            : mIsRunning(false)
             , mpApplication(pApplication)
         {
         }
@@ -78,7 +78,8 @@ namespace mvecs
          */
         void destroyEntity(const Entity& entity)
         {
-            mChunks[findChunk(entity.getChunkID())].deallocate(entity);
+            auto& chunk = mChunks[findChunk(entity.getChunkID())];
+            chunk.deallocate(entity);
             // mChunks.find(entity.getChunkID())->second.deallocate(entity);
         }
 
@@ -119,10 +120,10 @@ namespace mvecs
          * @tparam typename System型判定用
          */
         template <typename T, typename = std::is_base_of<ISystem<Key, Common>, T>>
-        void addSystem()
+        void addSystem(int executionOrder = 0)
         {
             // mSystems.insert(std::move(std::make_pair(systemID, std::move(std::make_unique<T>(this)))).first->second);
-            insertSystem(std::make_unique<T>(this));
+            insertSystem(std::make_unique<T>(this, executionOrder));
         }
 
         /**
@@ -147,8 +148,8 @@ namespace mvecs
         {
             for (auto& chunk : mChunks)
                 if (chunk.getArchetype().isIn<T>())
-                    for (auto& component : chunk.getComponentArray<T>())
-                        func(component);
+                    for (auto& componentData : chunk.getComponentArray<T>())
+                        func(componentData);
         }
 
         /**
@@ -165,12 +166,18 @@ namespace mvecs
             constexpr Archetype targetArchetype = Archetype::create<Args...>();
 
             for (auto& chunk : mChunks)
-                if (chunk.getArchetype().isIn(targetArchetype))
+            {
+                auto entityNum = chunk.getEntityNum();
+                if (chunk.getArchetype().isIn(targetArchetype) && entityNum > 0)
                 {
+                    assert(entityNum);
                     auto&& tuple = std::make_tuple(chunk.getComponentArray<Args>()...);
-                    for (std::size_t i = 0; i < chunk.getEntityNum(); ++i)
+                    for (std::size_t i = 0; i < entityNum; ++i)
+                    {
                         func(std::get<ComponentArray<Args>>(tuple)[i]...);
+                    }
                 }
+            }
         }
 
         /**
@@ -221,11 +228,10 @@ namespace mvecs
          */
         void init()
         {
+            mIsRunning = true;
             for (auto& system : mSystems)
-                // system.second->onUpdate();
+                // system.second->onInit();
                 system->onInit();
-
-            mIsInitialized = true;
         }
 
         /**
@@ -234,14 +240,25 @@ namespace mvecs
          */
         void update()
         {
-            for (auto& system : mSystems)
+            for (auto itr = mSystems.begin(); itr != mSystems.end(); ++itr)
+            {
                 // system.second->onUpdate();
-                system->onUpdate();
+                (*itr)->onUpdate();
+                if ((*itr)->removeThis())
+                {
+                    mSystems.erase(itr);
+                    continue;
+                }
+            }
 
-            //std::cout << "debug--------\n";
+            // std::cout << "debug--------\n";
             // for (const auto& chunk : mChunks)
-            //     std::cout << chunk.getArchetype().getTypeCount() << "\n";
-            //std::cout << "-------------\n";
+            // {
+            //     std::cout << "chunk size : " << chunk.getEntityNum() << "\n";
+            //     chunk.dumpIndexMemory();
+            //     std::cout << "\n\n";
+            // }
+            // std::cout << "-------------\n";
         }
 
         /**
@@ -255,7 +272,7 @@ namespace mvecs
                 system->onEnd();
 
             for (auto& chunk : mChunks)
-                chunk.clear();
+                chunk.destroy();
         }
 
         /**
@@ -360,20 +377,20 @@ namespace mvecs
          */
         std::unique_ptr<ISystem<Key, Common>>& insertSystem(std::unique_ptr<ISystem<Key, Common>>&& system)
         {
-            auto itr = std::lower_bound(mSystems.begin(), mSystems.end(), system, [](const std::unique_ptr<ISystem<Key, Common>>& left, const std::unique_ptr<ISystem<Key, Common>>& right)
+            auto iter = std::lower_bound(mSystems.begin(), mSystems.end(), system, [](const std::unique_ptr<ISystem<Key, Common>>& left, const std::unique_ptr<ISystem<Key, Common>>& right)
                                         { return left->getExecutionOrder() < right->getExecutionOrder(); });
-            if (itr == mSystems.end())
+            if (iter == mSystems.end())
             {
                 mSystems.emplace_back(std::move(system));
-                itr = --mSystems.end();
+                iter = mSystems.end() - 1;
             }
             else
-                mSystems.insert(itr, std::move(system));
+                iter = mSystems.insert(iter, std::move(system));
 
-            if (mIsInitialized)
-                (*itr)->onInit();
+            if (mIsRunning)
+                (*iter)->onInit();
 
-            return *itr;
+            return *iter;
         }
 
         /**
@@ -402,7 +419,7 @@ namespace mvecs
         std::vector<std::unique_ptr<ISystem<Key, Common>>> mSystems;
 
         //! すでにinitされたかどうか これによってSystem追加時にinitするかどうか決まる
-        bool mIsInitialized;
+        bool mIsRunning;
     };
 
 }  // namespace mvecs

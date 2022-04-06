@@ -17,7 +17,7 @@ namespace mvecs
          * @param ID ChunkでのID
          * @param chunkID ChunkのID
          */
-        Entity(std::size_t ID, std::size_t chunkID);
+        Entity(std::size_t* pID, std::size_t chunkID);
 
         /**
          * @brief ChunkでのIDを取得
@@ -34,8 +34,8 @@ namespace mvecs
         std::size_t getChunkID() const;
 
     private:
-        //! ChunkでのID
-        std::size_t mID;
+        //! ChunkでのIDへのアドレス
+        std::size_t* mpID;
         //! ChunkのID
         std::size_t mChunkID;
     };
