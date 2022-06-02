@@ -26,7 +26,14 @@ namespace mvecs
             , mEnded(false)
             , mInitialized(false)
         {
+            mCommon = std::unique_ptr<Common>(new Common);
         }
+
+        //~Application()
+        //{
+        //    mWorlds.clear();
+        //    mCommon.release();
+        //}
 
         /**
          * @brief Worldを追加する
@@ -118,13 +125,22 @@ namespace mvecs
         }
 
         /**
+         * @brief このapplicationを破棄する
+         */
+        void destroy()
+        {
+            mWorlds.clear();
+            mCommon.reset();
+        }
+
+        /**
          * @brief 共有領域を取得する
          *
          * @return Common&
          */
         Common& common()
         {
-            return mCommon;
+            return *mCommon;
         }
 
     private:
@@ -133,7 +149,7 @@ namespace mvecs
 
         World<Key, Common>* mCurrent;
 
-        Common mCommon;
+        std::unique_ptr<Common> mCommon;
 
         bool mEnded;
         bool mInitialized;

@@ -62,11 +62,11 @@ public:                                         \
          * @tparam typename ComponentData判定用
          * @param func 実行する関数オブジェクト
          */
-        template <typename T>
-        void forEach(const std::function<void(T&)>& func)
-        {
-            mpWorld->template forEach<T>(func);
-        }
+        //template <typename T>
+        //void forEach(const std::function<void(T&)>& func)
+        //{
+        //    mpWorld->template forEach<T>(func);
+        //}
 
         /**
          * @brief 複数のComponentData型に対するforEach
@@ -103,7 +103,7 @@ public:                                         \
         template <typename... Args>
         Entity createEntity(const std::size_t reserveSizeIfCreatedNewChunk = 1)
         {
-            mpWorld->template createEntity<Args...>(reserveSizeIfCreatedNewChunk);
+            return mpWorld->template createEntity<Args...>(reserveSizeIfCreatedNewChunk);
         }
 
         /**

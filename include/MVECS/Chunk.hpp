@@ -6,6 +6,7 @@
 #include <cstring>
 #include <limits>
 #include <memory>
+#include <vector>
 
 #include "Archetype.hpp"
 #include "ComponentArray.hpp"
@@ -32,6 +33,7 @@ namespace mvecs
          */
         static Chunk create(const std::size_t ID, const Archetype& archetype, const std::size_t maxEntityNum = 1)
         {
+
             Chunk rtn(ID, archetype);
             //rtn.mMemory = new std::byte[(archetype.getAllTypeSize() + sizeof(std::size_t)) * maxEntityNum]();
             std::size_t memSize = archetype.getAllTypeSize() * maxEntityNum;

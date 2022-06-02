@@ -143,14 +143,14 @@ namespace mvecs
          * @tparam T
          * @param func 実行する関数オブジェクト
          */
-        template <typename T, typename = std::enable_if<IsComponentDataType<T>>>
-        void forEach(const std::function<void(T&)>& func)
-        {
-            for (auto& chunk : mChunks)
-                if (chunk.getArchetype().isIn<T>())
-                    for (auto& componentData : chunk.getComponentArray<T>())
-                        func(componentData);
-        }
+        //template <typename T, typename = std::enable_if<IsComponentDataType<T>>>
+        //void forEach(const std::function<void(T&)>& func)
+        //{
+        //    for (auto& chunk : mChunks)
+        //        if (chunk.getArchetype().isIn<T>())
+        //            for (auto& componentData : chunk.getComponentArray<T>())
+        //                func(componentData);
+        //}
 
         /**
          * @brief 複数のComponentData型に対するforEach

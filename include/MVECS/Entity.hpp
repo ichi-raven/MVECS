@@ -2,6 +2,7 @@
 #define MVECS_MVECS_ENTITY_HPP_
 
 #include <cstdint>
+#include <cstddef>
 
 namespace mvecs
 {
