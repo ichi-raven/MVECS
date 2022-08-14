@@ -328,16 +328,19 @@ namespace mvecs
             // mChunks.emplace_back(std::move(chunk));
             // return mChunks.back();
 
-            auto&& itr = std::lower_bound(mChunks.begin(), mChunks.end(), chunk, [](const Chunk& left, const Chunk& right)
+            auto&& iter = std::lower_bound(mChunks.begin(), mChunks.end(), chunk, [](const Chunk& left, const Chunk& right)
                                           { return left.getID() < right.getID(); });
-            if (itr == mChunks.end())
+            if (iter == mChunks.end())
             {
                 mChunks.emplace_back(std::move(chunk));
-                itr = --mChunks.end();
+                iter = mChunks.end() - 1;
             }
             else
-                mChunks.insert(itr, std::move(chunk));
-            return *itr;
+            {
+                mChunks.insert(iter, std::move(chunk));
+            }
+
+            return *iter;
         }
 
         /**
@@ -366,7 +369,7 @@ namespace mvecs
             }
 
             assert(!"chunk was not found!");
-            return std::numeric_limits<std::size_t>::max();
+             return std::numeric_limits<std::size_t>::max();
         }
 
         /**
@@ -382,13 +385,18 @@ namespace mvecs
             if (iter == mSystems.end())
             {
                 mSystems.emplace_back(std::move(system));
-                iter = mSystems.end() - 1;
+                iter = mSystems.end();
+                --iter;
             }
             else
+            {
                 iter = mSystems.insert(iter, std::move(system));
+            }
 
             if (mIsRunning)
+            {
                 (*iter)->onInit();
+            }
 
             return *iter;
         }
@@ -406,7 +414,9 @@ namespace mvecs
             addSystem<Head>();
 
             if constexpr (sizeof...(Tail) != 0)
+            {
                 addSystemsImpl<Tail...>();
+            }
         }
 
         //! Applicationのポインタ
@@ -416,7 +426,7 @@ namespace mvecs
         std::vector<Chunk> mChunks;
 
         //! Systemたち
-        std::vector<std::unique_ptr<ISystem<Key, Common>>> mSystems;
+        std::list<std::unique_ptr<ISystem<Key, Common>>> mSystems;
 
         //! すでにinitされたかどうか これによってSystem追加時にinitするかどうか決まる
         bool mIsRunning;
