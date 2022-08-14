@@ -62,7 +62,7 @@ namespace mvecs
         if (mEntityNum + 1 >= mMaxEntityNum)
         {
             // DEBUG!!!!!!!!
-            std::cerr << "plus realloc : " << mMaxEntityNum * 2 << "\n";
+            //std::cerr << "plus realloc : " << mMaxEntityNum * 2 << "\n";
             // メモリを再割り当てする
             reallocate(mMaxEntityNum * 2);  // std::vectorの真似
         }
@@ -161,7 +161,7 @@ namespace mvecs
         if (mEntityNum && mEntityNum < (mMaxEntityNum / 3) && mMaxEntityNum > 16)
         {
             // DEBUG!!!!!!!!!
-            std::cerr << "minus realloc : " << mMaxEntityNum / 2 << "\n";
+            //std::cerr << "minus realloc : " << mMaxEntityNum / 2 << "\n";
 
             reallocate(mMaxEntityNum / 2);
         }
@@ -179,8 +179,6 @@ namespace mvecs
         // indexクリア, 新規要素挿入
         for (auto& p : mpEntityIDs)
             delete p;
-
-        int debug = 0;
 
         mpEntityIDs.clear();
 
@@ -258,7 +256,7 @@ namespace mvecs
         const auto oldMaxEntityNum = mMaxEntityNum;
 
         // 新メモリ割当て
-        // std::byte* newMem = new std::byte[(mArchetype.getAllTypeSize() + sizeof(std::size_t)) * newMaxEntityNum];
+        //std::byte* newMem = new std::byte[(mArchetype.getAllTypeSize() + sizeof(std::size_t)) * newMaxEntityNum];
         auto&& newMemSize = mArchetype.getAllTypeSize() * newMaxEntityNum;
         std::byte* newMem = new std::byte[mArchetype.getAllTypeSize() * newMaxEntityNum]();
         std::memset(newMem, 0, newMemSize);

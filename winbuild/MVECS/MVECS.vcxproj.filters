@@ -53,5 +53,8 @@
     <ClInclude Include="..\..\include\MVECS\World.hpp">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\include\MVECS\IChunk.hpp">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

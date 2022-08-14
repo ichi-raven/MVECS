@@ -239,6 +239,7 @@ namespace mvecs
 
         //! 型情報(TypeInfo)の配列
         TypeInfo mTypes[MaxTypeNum];
+
         //! 現在の型の個数
         std::size_t mTypeCount = 0;
         //! 型サイズの総和を事前に計算しておく

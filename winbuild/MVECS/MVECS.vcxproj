@@ -28,6 +28,7 @@
     <ClInclude Include="..\..\include\MVECS\Chunk.hpp" />
     <ClInclude Include="..\..\include\MVECS\ComponentArray.hpp" />
     <ClInclude Include="..\..\include\MVECS\Entity.hpp" />
+    <ClInclude Include="..\..\include\MVECS\IChunk.hpp" />
     <ClInclude Include="..\..\include\MVECS\IComponentData.hpp" />
     <ClInclude Include="..\..\include\MVECS\ISystem.hpp" />
     <ClInclude Include="..\..\include\MVECS\MVECS.hpp" />
