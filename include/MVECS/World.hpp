@@ -48,7 +48,7 @@ namespace mvecs
         ~World()
         {
             mSystems.clear();
-            mChunks.clear();
+            mpChunks.clear();
         }
 
         /**
@@ -62,13 +62,18 @@ namespace mvecs
         Entity createEntity(const std::size_t reserveSizeIfCreatedNewChunk = 1)
         {
             constexpr Archetype archetype = Archetype::create<Args...>();
-            for (auto& e : mChunks)
+
+            for (auto& e : mpChunks)
             {
-                if (e.getArchetype() == archetype)
-                    return e.allocate();
+                if (e->getArchetype() == archetype)
+                {
+                    return e->allocate();
+                }
             }
 
-            return insertChunk(Chunk::create(genChunkID(), archetype, reserveSizeIfCreatedNewChunk)).allocate();
+            auto* p = new Chunk<Args...>(Chunk<Args...>::create(genChunkID(), archetype, reserveSizeIfCreatedNewChunk));
+
+            return insertChunk(p)->allocate();
         }
 
         /**
@@ -78,9 +83,10 @@ namespace mvecs
          */
         void destroyEntity(const Entity& entity)
         {
-            auto& chunk = mChunks[findChunk(entity.getChunkID())];
-            chunk.deallocate(entity);
-            // mChunks.find(entity.getChunkID())->second.deallocate(entity);
+            mpChunks[findChunk(entity.getChunkID())]->deallocate(entity);
+            //auto& chunk = mpChunks[findChunk(entity.getChunkID())];
+            //chunk->deallocate(entity);
+            // mpChunks.find(entity.getChunkID())->second.deallocate(entity);
         }
 
         /**
@@ -93,9 +99,9 @@ namespace mvecs
         template <typename T>
         void setComponentData(const Entity& entity, const T& value)
         {
-            const auto index = findChunk(entity.getChunkID());
-            return mChunks[index].template setComponentData<T>(entity, value);
-            // mChunks.find(entity.getChunkID())->second.setComponentData<T>(entity, value);
+            //const auto index = findChunk(entity.getChunkID());
+            return mpChunks[findChunk(entity.getChunkID())]->template getComponentData<T>(entity) = value;
+            // mpChunks.find(entity.getChunkID())->second.setComponentData<T>(entity, value);
         }
 
         /**
@@ -108,9 +114,9 @@ namespace mvecs
         template <typename T>
         T& getComponentData(const Entity& entity)
         {
-            const auto index = findChunk(entity.getChunkID());
-            return mChunks[index].template getComponentData<T>(entity);
-            // return mChunks.find(entity.getChunkID())->second.getComponentData<T>(entity);
+            //const auto index = findChunk(entity.getChunkID());
+            return mpChunks[findChunk(entity.getChunkID())].template getComponentData<T>(entity);
+            // return mpChunks.find(entity.getChunkID())->second.getComponentData<T>(entity);
         }
 
         /**
@@ -146,7 +152,7 @@ namespace mvecs
         //template <typename T, typename = std::enable_if<IsComponentDataType<T>>>
         //void forEach(const std::function<void(T&)>& func)
         //{
-        //    for (auto& chunk : mChunks)
+        //    for (auto& chunk : mpChunks)
         //        if (chunk.getArchetype().isIn<T>())
         //            for (auto& componentData : chunk.getComponentArray<T>())
         //                func(componentData);
@@ -165,13 +171,13 @@ namespace mvecs
 
             constexpr Archetype targetArchetype = Archetype::create<Args...>();
 
-            for (auto& chunk : mChunks)
+            for (auto& pChunk : mpChunks)
             {
-                auto entityNum = chunk.getEntityNum();
-                if (chunk.getArchetype().isIn(targetArchetype) && entityNum > 0)
+                auto entityNum = pChunk->getEntityNum();
+                if (pChunk->getArchetype().isIn(targetArchetype) && entityNum > 0)
                 {
                     assert(entityNum);
-                    auto&& tuple = std::make_tuple(chunk.getComponentArray<Args>()...);
+                    auto&& tuple = std::make_tuple(pChunk->getComponentArray<Args>()...);
                     for (std::size_t i = 0; i < entityNum; ++i)
                     {
                         func(std::get<ComponentArray<Args>>(tuple)[i]...);
@@ -194,11 +200,15 @@ namespace mvecs
         {
             // ComponentArray作成
             std::vector<ComponentArray<T>> componentArrays;
-            const auto&& reserveSize = mChunks.size() / 4;
+            const auto&& reserveSize = mpChunks.size() / 4;
             componentArrays.reserve(reserveSize < 1 ? 1 : reserveSize);
-            for (auto& chunk : mChunks)
-                if (chunk.getArchetype().isIn<T>())
-                    componentArrays.emplace_back(chunk.getComponentArray<T>());
+            for (auto& pChunk : mpChunks)
+            {
+                if (pChunk->getArchetype().isIn<T>())
+                {
+                    componentArrays.emplace_back(pChunk->getComponentArray<T>());
+                }
+            }
 
             // 実行
             std::array<std::thread, ThreadNum> threads;
@@ -219,7 +229,9 @@ namespace mvecs
             }
 
             for (auto& thread : threads)
+            {
                 thread.join();
+            }
         }
 
         /**
@@ -230,8 +242,10 @@ namespace mvecs
         {
             mIsRunning = true;
             for (auto& system : mSystems)
+            {
                 // system.second->onInit();
                 system->onInit();
+            }
         }
 
         /**
@@ -244,6 +258,7 @@ namespace mvecs
             {
                 // system.second->onUpdate();
                 (*itr)->onUpdate();
+
                 if ((*itr)->removeThis())
                 {
                     mSystems.erase(itr);
@@ -252,7 +267,7 @@ namespace mvecs
             }
 
             // std::cout << "debug--------\n";
-            // for (const auto& chunk : mChunks)
+            // for (const auto& chunk : mpChunks)
             // {
             //     std::cout << "chunk size : " << chunk.getEntityNum() << "\n";
             //     chunk.dumpIndexMemory();
@@ -268,11 +283,15 @@ namespace mvecs
         void end()
         {
             for (auto& system : mSystems)
+            {
                 // system.second->onUpdate();
                 system->onEnd();
+            }
 
-            for (auto& chunk : mChunks)
-                chunk.destroy();
+            for (auto& pChunk : mpChunks)
+            {
+                pChunk->destroy();
+            }
         }
 
         /**
@@ -323,21 +342,23 @@ namespace mvecs
          * @param chunk
          * @return Chunk&
          */
-        Chunk& insertChunk(Chunk&& chunk)
+        std::unique_ptr<IChunk>& insertChunk(IChunk* pChunk)
         {
-            // mChunks.emplace_back(std::move(chunk));
-            // return mChunks.back();
+            // mpChunks.emplace_back(std::move(chunk));
+            // return mpChunks.back();
 
-            auto&& iter = std::lower_bound(mChunks.begin(), mChunks.end(), chunk, [](const Chunk& left, const Chunk& right)
-                                          { return left.getID() < right.getID(); });
-            if (iter == mChunks.end())
+            auto&& uniquePtr = std::unique_ptr<IChunk>(pChunk);
+
+            auto&& iter = std::lower_bound(mpChunks.begin(), mpChunks.end(), uniquePtr, [](const std::unique_ptr<IChunk>& left, const std::unique_ptr<IChunk>& right)
+                                          { return left->getID() < right->getID(); });
+            if (iter == mpChunks.end())
             {
-                mChunks.emplace_back(std::move(chunk));
-                iter = mChunks.end() - 1;
+                mpChunks.emplace_back(std::move(uniquePtr));
+                iter = mpChunks.end() - 1;
             }
             else
             {
-                mChunks.insert(iter, std::move(chunk));
+                mpChunks.insert(iter, std::move(uniquePtr));
             }
 
             return *iter;
@@ -351,21 +372,27 @@ namespace mvecs
          */
         std::size_t findChunk(std::size_t chunkID)
         {
-            // for (std::size_t i = 0; i < mChunks.size(); ++i)
-            //     if (mChunks[i].getID() == chunkID)
+            // for (std::size_t i = 0; i < mpChunks.size(); ++i)
+            //     if (mpChunks[i].getID() == chunkID)
             //         return i;
 
-            auto lower = mChunks.begin();
-            auto upper = mChunks.end() - 1;
+            auto lower = mpChunks.begin();
+            auto upper = mpChunks.end() - 1;
             while (lower <= upper)
             {
                 auto mid = lower + (upper - lower) / 2;
-                if (chunkID == mid->getID())
-                    return std::distance(mChunks.begin(), mid);
-                else if (chunkID < mid->getID())
+                if (chunkID == (*mid)->getID())
+                {
+                    return std::distance(mpChunks.begin(), mid);
+                }
+                else if (chunkID < (*mid)->getID())
+                {
                     upper = mid - 1;
+                }
                 else
+                {
                     lower = mid + 1;
+                }
             }
 
             assert(!"chunk was not found!");
@@ -423,7 +450,7 @@ namespace mvecs
         Application<Key, Common>* mpApplication;
 
         //! Chunkたち
-        std::vector<Chunk> mChunks;
+        std::vector<std::unique_ptr<IChunk>> mpChunks;
 
         //! Systemたち
         std::list<std::unique_ptr<ISystem<Key, Common>>> mSystems;

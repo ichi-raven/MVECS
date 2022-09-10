@@ -11,6 +11,7 @@
 
 namespace mvecs
 {
+
     /**
      * @brief Chunkが持つ型(Entityが持つ型)の情報を定義するもの 基本的にコンパイル時処理
      *
@@ -20,6 +21,11 @@ namespace mvecs
     public:
         //! Archetypeが持てる型情報の個数の限界
         static constexpr std::size_t MaxTypeNum = 16;
+
+        constexpr Archetype()
+            : mTypeIndexTable()
+        {
+        }
 
         /**
          * @brief Archetypeが同一かどうか判定する
@@ -31,11 +37,18 @@ namespace mvecs
         constexpr bool operator==(const Archetype& other) const
         {
             if (mTypeCount != other.mTypeCount)
+            {
                 return false;
+            }
 
             for (std::size_t i = 0; i < mTypeCount; ++i)
+            {
                 if (mTypes[i] != other.mTypes[i])
+                {
                     return false;
+                }
+            }
+
             return true;
         }
 
@@ -61,21 +74,27 @@ namespace mvecs
         constexpr bool isIn(const Archetype& other) const
         {
             if (mTypeCount < other.mTypeCount)
+            {
                 return false;
+            }
 
             bool in = false;
             for (std::size_t i = 0; i < other.mTypeCount; ++i)
             {
                 in = false;
                 for (std::size_t j = 0; j < mTypeCount && other.mTypes[i].getHash() <= mTypes[j].getHash(); ++j)
+                {
                     if (other.mTypes[i] == mTypes[j])
                     {
                         in = true;
                         break;
                     }
+                }
 
                 if (!in)
+                {
                     return false;
+                }
             }
 
             return true;
@@ -94,8 +113,13 @@ namespace mvecs
         {
             std::uint32_t hash = T::getTypeHash();
             for (std::size_t i = 0; i < mTypeCount && hash <= mTypes[i].getHash(); ++i)
+            {
                 if (mTypes[i].getHash() == hash)
+                {
                     return true;
+                }
+            }
+
             return false;
         }
 
@@ -111,8 +135,13 @@ namespace mvecs
         {
             std::uint32_t hash = T::getTypeHash();
             for (std::size_t i = 0; i < mTypeCount && hash <= mTypes[i].getHash(); ++i)
+            {
                 if (mTypes[i].getHash() == hash)
+                {
                     return i;
+                }
+            }
+
             assert(!"the type is not in this archetype!");
         }
 
@@ -123,12 +152,15 @@ namespace mvecs
          * @param coef 係数(単に各型のサイズに掛けられる)
          * @return constexpr std::size_t オフセット(バイト)
          */
-        constexpr std::size_t getTypeOffset(std::size_t indexUntil, std::size_t coef = 1) const
+        constexpr std::size_t getTypeOffset(std::size_t indexUntil, std::size_t coef) const
         {
             assert(indexUntil < mTypeCount);
             std::size_t rtn = 0;
             for (std::size_t i = 0; i < indexUntil; ++i)
+            {
                 rtn += coef * mTypes[i].getSize();
+            }
+
             return rtn;
         }
 
@@ -141,10 +173,26 @@ namespace mvecs
         constexpr std::size_t getTypeIndex(std::size_t hash)
         {
             for (std::size_t i = 0; i < mTypeCount && hash <= mTypes[i].getHash(); ++i)
+            {
                 if (mTypes[i].getHash() == hash)
+                {
                     return i;
+                }
+            }
+
             assert(!"the type is not in this archetype!");
             return std::numeric_limits<std::size_t>::max();
+        }
+
+        /**
+         * @brief ComponentData型のArchetype上での添字から元の添字を取得する
+         *
+         * @param typeIndex Archtype上での添字(getTypeIndexで取得できるもの)
+         * @return constexpr std::size_t その型の元の添字
+         */
+        constexpr std::size_t getReverseTypeIndex(std::size_t typeIndex)
+        {
+            return mTypeIndexTable[typeIndex];
         }
 
         /**
@@ -172,15 +220,29 @@ namespace mvecs
             rtn.createImpl<Args...>();
 
             // ソートする(降順)
+            std::size_t maxIndex = 0;
             TypeInfo tmp;
+            std::size_t tmp2 = 0;
             for (std::size_t i = 0; i < MaxTypeNum - 1; ++i)
+            {
+                maxIndex = i;
+
                 for (std::size_t j = i + 1; j < MaxTypeNum; ++j)
-                    if (rtn.mTypes[i].getHash() < rtn.mTypes[j].getHash())
+                {
+                    if (rtn.mTypes[maxIndex].getHash() < rtn.mTypes[j].getHash())
                     {
-                        tmp           = rtn.mTypes[i];
-                        rtn.mTypes[i] = rtn.mTypes[j];
-                        rtn.mTypes[j] = tmp;
+                        maxIndex = j;
                     }
+                }
+
+                tmp = rtn.mTypes[maxIndex];
+                rtn.mTypes[maxIndex] = rtn.mTypes[i];
+                rtn.mTypes[i] = tmp;
+
+                tmp2 = rtn.mTypeIndexTable[maxIndex];
+                rtn.mTypeIndexTable[maxIndex] = rtn.mTypeIndexTable[i];
+                rtn.mTypeIndexTable[i] = tmp2;
+            }
 
             return rtn;
         }
@@ -229,21 +291,31 @@ namespace mvecs
         {
             assert(IsComponentDataType<Head> || !"the type is not ComponentData!");
 
-            mTypes[mTypeCount++] = TypeInfo::create<Head>();
-            mAllTypeSize += sizeof(Head);
-            assert(mTypeCount < MaxTypeNum || !"over max ComponentData type num!");
+            {
+                mTypes[mTypeCount] = TypeInfo::create<Head>();
+                mTypeIndexTable[mTypeCount] = mTypeCount;
+                mTypeCount++;
+                mAllTypeSize += sizeof(Head);
+            }
+
+            assert(mTypeCount <= MaxTypeNum || !"over max ComponentData type num!");
 
             if constexpr (sizeof...(Tails) != 0)
+            {
                 createImpl<Tails...>();
+            }
+
         }
 
         //! 型情報(TypeInfo)の配列
         TypeInfo mTypes[MaxTypeNum];
-
+        //! Args...で渡される型の順序をどのように入れ替えたかのテーブル
+        std::size_t mTypeIndexTable[MaxTypeNum];
         //! 現在の型の個数
         std::size_t mTypeCount = 0;
         //! 型サイズの総和を事前に計算しておく
         std::size_t mAllTypeSize = 0;
+
     };
 }  // namespace mvecs
 

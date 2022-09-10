@@ -89,19 +89,29 @@ namespace mvecs
         {
             assert(TypeBinding::HasTypeInfoValue<Head> || !"this type does not have a type info!");
             if (now >= size - 1)
+            {
                 return false;
+            }
 
             uint32_t&& hash = Head::getTypeHash();
             for (std::size_t i = 0; i < now; ++i)
+            {
                 if (table[i] == hash)
+                {
                     return true;
+                }
+            }
             
             table[now] = hash;
 
             if (sizeof...(Tails) != 0)
+            {
                 return checkSynonymImpl<Tails...>(table, now + 1);
-            else 
+            }
+            else
+            {
                 return false;
+            }
         }
         
         /**

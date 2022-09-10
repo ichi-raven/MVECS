@@ -1,6 +1,6 @@
 #pragma once
-#ifndef MVECS_MVECS_CHUNK_HPP_
-#define MVECS_MVECS_CHUNK_HPP_
+#ifndef MVECS_MVECS_ICHUNK_HPP_
+#define MVECS_MVECS_ICHUNK_HPP_
 
 #include <cstddef>
 #include <cstdint>
@@ -26,29 +26,6 @@ namespace mvecs
     class IChunk
     {
     public:
-        /**
-         * @brief 与えられたArchetypeからChunkを構築する
-         *
-         * @param entitySize Chunkが持つEntityの最大数
-         * @return Chunk 構築したChunk
-         */
-        static IChunk create(const std::size_t ID, const Archetype& archetype, const std::size_t maxEntityNum = 1)
-        {
-
-            IChunk rtn(ID, archetype);
-            //rtn.mMemory = new std::byte[(archetype.getAllTypeSize() + sizeof(std::size_t)) * maxEntityNum]();
-            std::size_t memSize = archetype.getAllTypeSize() * maxEntityNum;
-            rtn.mMemory = new std::byte[memSize]();
-            // メモリクリア
-            std::memset(rtn.mMemory, 0, memSize);
-            rtn.mMaxEntityNum = maxEntityNum;
-            assert(rtn.mMaxEntityNum != 0);
-
-            // ID-index部のメモリクリア
-            // std::memset(rtn.mMemory + archetype.getAllTypeSize() * maxEntityNum, 0xFF, maxEntityNum * sizeof(std::size_t));
-
-            return rtn;
-        }
 
         /**
          * @brief コンストラクタ
@@ -61,7 +38,7 @@ namespace mvecs
          * @brief デストラクタ
          *
          */
-        ~IChunk();
+        virtual ~IChunk();
 
         /**
          * @brief コピーコンストラクタはdelete
@@ -74,24 +51,24 @@ namespace mvecs
          * @brief 代入によるコピーもdelete
          *
          * @param src
-         * @return Chunk&
+         * @return IChunk&
          */
         IChunk& operator=(const IChunk& src) = delete;
 
         /**
          * @brief ムーブコンストラクタ
          *
-         * @param chunk ムーブ元
+         * @param src ムーブ元
          */
-        IChunk(IChunk&& src);
+        IChunk(IChunk&& src) noexcept;
 
         /**
          * @brief ムーブコンストラクタ 演算子オーバーロード
          *
          * @param src
-         * @return Chunk&
+         * @return IChunk&
          */
-        IChunk& operator=(IChunk&& src);
+        IChunk& operator=(IChunk&& src) noexcept;
 
         /**
          * @brief ChunkのIDを取得する
@@ -112,14 +89,14 @@ namespace mvecs
          * @details 実際の値は何も書き込まれていないので注意
          * @return Entity
          */
-        virtual Entity allocate();
+        virtual Entity allocate() = 0;
 
         /**
          * @brief 指定したEntityを削除してメモリを詰める
          *
          * @param entity 削除するEntity
          */
-        virtual void deallocate(const Entity& entity);
+        virtual void deallocate(const Entity& entity) = 0;
 
         /**
          * @brief メモリ全体をクリアし、size=1にする
@@ -131,14 +108,14 @@ namespace mvecs
          * @brief 完全にChunkを破棄する(メモリを全て解放する)
          *
          */
-        void destroy();
+        virtual void destroy() = 0;
 
         /**
          * @brief entityをotherのChunkに移動する
          *
          * @param other 移動先Chunk
          */
-        Entity moveTo(const Entity& entity, Chunk& other);
+        //Entity moveTo(const Entity& entity, Chunk& other);
 
         /**
          * @brief ComponentDataの値を書き込む
@@ -147,23 +124,18 @@ namespace mvecs
          * @param entity 書き込み先Entity
          * @param value 書き込むComponentData
          */
-        template <typename T, typename = std::enable_if_t<IsComponentDataType<T>>>
-        void setComponentData(const Entity& entity, const T& value)
-        {
-            assert(mArchetype.isIn<T>() || !"T is not in Archetype");
-            // ID-indexテーブル
-            // const std::size_t* memToIndexPart = reinterpret_cast<std::size_t*>(mMemory + mArchetype.getAllTypeSize() * mMaxEntityNum);
-            // const std::size_t index           = memToIndexPart[entity.getID()];
+        //template <typename T, typename = std::enable_if_t<IsComponentDataType<T>>>
+        //void setComponentData(const Entity& entity, const T& value)
+        //{
+        //    assert(mArchetype.isIn<T>() || !"T is not in Archetype");
+        //    assert(entity.getID() <= mEntityNum || !"invalid entity ID!");
 
-            // assert(index != std::numeric_limits<size_t>::max() || !"this entity was not allocated!");
-            assert(entity.getID() <= mEntityNum || !"invalid entity ID!");
+        //    // 書き込む型までのオフセット
+        //    const std::size_t offset = mArchetype.getTypeOffset(mArchetype.getTypeIndex<T>(), mMaxEntityNum);
 
-            // 書き込む型までのオフセット
-            const std::size_t offset = mArchetype.getTypeOffset(mArchetype.getTypeIndex<T>(), mMaxEntityNum);
-
-            // 書き込み
-            std::memcpy(mMemory + offset + entity.getID() * sizeof(T), &value, sizeof(T));
-        }
+        //    // 書き込み
+        //    std::memcpy(mpMemory + offset + entity.getID() * sizeof(T), &value, sizeof(T));
+        //}
 
         /**
          * @brief  ComponentDataの値を取得する
@@ -177,16 +149,12 @@ namespace mvecs
         T& getComponentData(const Entity& entity) const
         {
             assert(mArchetype.isIn<T>() || !"T is not in Archetype");
-            // const std::size_t* memToIndexPart = reinterpret_cast<std::size_t*>(mMemory + mArchetype.getAllTypeSize() * mMaxEntityNum);
-            // const std::size_t index           = memToIndexPart[entity.getID()];
-            // assert(index != std::numeric_limits<size_t>::max() || !"this entity was not allocated!");
 
             // 書き込む型までのオフセット
             std::size_t offset = mArchetype.getTypeOffset(mArchetype.getTypeIndex<T>(), mMaxEntityNum);
 
             // 読み出し
-            // return *reinterpret_cast<T*>(mMemory + offset + index * sizeof(T));
-            return *reinterpret_cast<T*>(mMemory + offset + entity.getID() * sizeof(T));
+            return *(reinterpret_cast<T*>(mpMemory + offset + entity.getID() * sizeof(T)));
         }
 
         /**
@@ -194,7 +162,7 @@ namespace mvecs
          *
          * @param maxEntityNum 新しい最大Entity数
          */
-        void reallocate(const std::size_t maxEntityNum);
+        virtual void reallocate(const std::size_t maxEntityNum) = 0;
 
         /**
          * @brief 指定した型のComponentArrayを取得する
@@ -211,7 +179,7 @@ namespace mvecs
             // 使用する型までのオフセット
             std::size_t offset = mArchetype.getTypeOffset(mArchetype.getTypeIndex<T>(), mMaxEntityNum);
 
-            return ComponentArray<T>(reinterpret_cast<T*>(mMemory + offset), mEntityNum);
+            return ComponentArray<T>(reinterpret_cast<T*>(mpMemory + offset), mEntityNum);
         }
 
         /**
@@ -233,9 +201,9 @@ namespace mvecs
          */
         void dumpIndexMemory() const;
 
-    private:
+    protected:
 
-        void insertEntityIndex(std::size_t* pIndex);
+        //void insertEntityIndex(std::size_t* pIndex);
 
         //! ChunkのID
         std::size_t mID;
@@ -243,13 +211,11 @@ namespace mvecs
         //! もととなるArchetype
         Archetype mArchetype;
         //! メモリアドレス
-        std::byte* mMemory;
+        std::byte* mpMemory;
         //! 割り当てられる最大のEntity数
         std::size_t mMaxEntityNum;
         //! 現在のEntity数
         std::size_t mEntityNum;
-        //! Entityに割り当てるテーブルの添字(ID)
-        // std::size_t mNextEntityIndex;
 
         //!  割り当てたEntityたちのIDアドレス(destroyに応じて書き換える)
         std::vector<std::size_t*> mpEntityIDs;

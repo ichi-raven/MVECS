@@ -1,3 +1,10 @@
+/*****************************************************************//**
+ * @file   Chunk.hpp
+ * @brief  IChunkの可変長テンプレート引数を持つためのクラス定義・実装
+ *
+ * @author ichi-raven
+ * @date   September 2022
+ *********************************************************************/
 #ifndef MVECS_MVECS_CHUNK_HPP_
 #define MVECS_MVECS_CHUNK_HPP_
 
@@ -7,252 +14,487 @@
 #include <limits>
 #include <memory>
 #include <vector>
+#include <tuple>
+#include <utility>
 
 #include "Archetype.hpp"
 #include "ComponentArray.hpp"
 #include "Entity.hpp"
+#include "IChunk.hpp"
 
-/**
- * @brief mvecs
- *
- */
+ /**
+  * @brief mvecs
+  *
+  */
 namespace mvecs
 {
-    /**
-     * @brief Chunkクラス Archetypeから作られる実際のメモリ上のデータ
-     *
-     */
-    class Chunk
-    {
-    public:
-        /**
-         * @brief 与えられたArchetypeからChunkを構築する
-         *
-         * @param entitySize Chunkが持つEntityの最大数
-         * @return Chunk 構築したChunk
-         */
-        static Chunk create(const std::size_t ID, const Archetype& archetype, const std::size_t maxEntityNum = 1)
-        {
+	/**
+	 * @brief Chunkクラス Archetypeから作られる実際のメモリ上のデータ(テンプレート引数を取れる実装)
+	 *
+	 */
+	template<typename... Args>
+	class Chunk : public IChunk
+	{
+	public:
+		/**
+		 * @brief 与えられたArchetypeからChunkを構築する
+		 *
+		 * @param entitySize Chunkが持つEntityの最大数
+		 * @return Chunk 構築したChunk
+		 */
+		static Chunk<Args...>&& create(const std::size_t ID, const Archetype& archetype, const std::size_t maxEntityNum = 1)
+		{
+			Chunk<Args...> rtn(ID, archetype);
 
-            Chunk rtn(ID, archetype);
-            //rtn.mMemory = new std::byte[(archetype.getAllTypeSize() + sizeof(std::size_t)) * maxEntityNum]();
-            std::size_t memSize = archetype.getAllTypeSize() * maxEntityNum;
-            rtn.mMemory = new std::byte[memSize]();
-            // メモリクリア
-            std::memset(rtn.mMemory, 0, memSize);
-            rtn.mMaxEntityNum = maxEntityNum;
-            assert(rtn.mMaxEntityNum != 0);
+			std::size_t memSize = archetype.getAllTypeSize() * maxEntityNum;
 
-            // ID-index部のメモリクリア
-            // std::memset(rtn.mMemory + archetype.getAllTypeSize() * maxEntityNum, 0xFF, maxEntityNum * sizeof(std::size_t));
+			// 割り当て
+			rtn.mpMemory = new std::byte[memSize]();
 
-            return rtn;
-        }
+			// メモリクリア(やらなくてもいいかも)
+			std::memset(rtn.mpMemory, 0, memSize);
+			rtn.mMaxEntityNum = maxEntityNum;
 
-        /**
-         * @brief コンストラクタ
-         *
-         * @param ID
-         */
-        Chunk(const std::size_t ID, const Archetype& archetype);
+			assert(rtn.mMaxEntityNum != 0);
 
-        /**
-         * @brief デストラクタ
-         *
-         */
-        ~Chunk();
+			return std::move(rtn);
+		}
 
-        /**
-         * @brief コピーコンストラクタはdelete
-         *
-         * @param src
-         */
-        Chunk(Chunk& src) = delete;
+		/**
+		 * @brief コンストラクタ
+		 *
+		 * @param ID
+		 */
+		Chunk(const std::size_t ID, const Archetype& archetype)
+			: IChunk(ID, archetype)
+		{
+		}
 
-        /**
-         * @brief 代入によるコピーもdelete
-         *
-         * @param src
-         * @return Chunk&
-         */
-        Chunk& operator=(const Chunk& src) = delete;
+		/**
+		 * @brief デストラクタ
+		 *
+		 */
+		virtual ~Chunk()
+		{
+			destroy();
+		}
 
-        /**
-         * @brief ムーブコンストラクタ
-         *
-         * @param chunk ムーブ元
-         */
-        Chunk(Chunk&& src);
+		/**
+		 * @brief コピーコンストラクタはdelete
+		 *
+		 * @param src
+		 */
+		Chunk(Chunk& src) = delete;
 
-        /**
-         * @brief ムーブコンストラクタ 演算子オーバーロード
-         *
-         * @param src
-         * @return Chunk&
-         */
-        Chunk& operator=(Chunk&& src);
+		/**
+		 * @brief 代入によるコピーもdelete
+		 *
+		 * @param src
+		 * @return Chunk&
+		 */
+		Chunk& operator=(const Chunk& src) = delete;
 
-        /**
-         * @brief ChunkのIDを取得する
-         *
-         * @return std::size_t ID
-         */
-        std::size_t getID() const;
+		/**
+		 * @brief ムーブコンストラクタ
+		 *
+		 * @param chunk ムーブ元
+		 */
+		Chunk(Chunk&& src) noexcept
+			: IChunk(std::forward<Chunk&&>(src))
+		{
+		}
 
-        /**
-         * @brief Archetypeを取得する
-         *
-         * @return Archetype
-         */
-        const Archetype& getArchetype() const;
+		/**
+		 * @brief ムーブコンストラクタ 演算子オーバーロード
+		 *
+		 * @param src
+		 * @return Chunk&
+		 */
+		Chunk& operator=(Chunk&& src) noexcept
+		{
+			mID = src.mID;
+			mArchetype = src.mArchetype;
+			mpMemory = src.mpMemory;
+			mMaxEntityNum = src.mMaxEntityNum;
+			mEntityNum = src.mEntityNum;
 
-        /**
-         * @brief Entityの領域を確保する
-         * @details 実際の値は何も書き込まれていないので注意
-         * @return Entity
-         */
-        Entity allocate();
+			src.destroy();
 
-        /**
-         * @brief 指定したEntityを削除してメモリを詰める
-         *
-         * @param entity 削除するEntity
-         */
-        void deallocate(const Entity& entity);
+			return *this;
+		}
 
-        /**
-         * @brief メモリ全体をクリアし、size=1にする
-         *
-         */
-        void clear();
+		/**
+		 * @brief Entityの領域を確保する
+		 * @details 実際の値は何も書き込まれていないので注意
+		 * @return Entity
+		 */
+		virtual Entity allocate() override
+		{
+			std::size_t* const pIndex = new std::size_t(mEntityNum);
+			Entity entity(pIndex, mID);
 
-        /**
-         * @brief 完全にChunkを破棄する(メモリを全て解放する)
-         * 
-         */
-        void destroy();
+			// 構築
+			for (std::size_t i = 0; i < sizeof...(Args); ++i)
+			{
+				// 書き込む型までのオフセット
+				const std::size_t offset = mArchetype.getTypeOffset(i, mMaxEntityNum);
 
-        /**
-         * @brief entityをotherのChunkに移動する
-         *
-         * @param other 移動先Chunk
-         */
-        Entity moveTo(const Entity& entity, Chunk& other);
+				std::byte* ptr = (mpMemory + offset + entity.getID() * mArchetype.getTypeSize(i));
 
-        /**
-         * @brief ComponentDataの値を書き込む
-         *
-         * @tparam T ComponentDataの型
-         * @param entity 書き込み先Entity
-         * @param value 書き込むComponentData
-         */
-        template <typename T, typename = std::enable_if_t<IsComponentDataType<T>>>
-        void setComponentData(const Entity& entity, const T& value)
-        {
-            assert(mArchetype.isIn<T>() || !"T is not in Archetype");
-            // ID-indexテーブル
-            // const std::size_t* memToIndexPart = reinterpret_cast<std::size_t*>(mMemory + mArchetype.getAllTypeSize() * mMaxEntityNum);
-            // const std::size_t index           = memToIndexPart[entity.getID()];
+				construct<Args...>(mArchetype.getReverseTypeIndex(i), ptr);
+			}
 
-            // assert(index != std::numeric_limits<size_t>::max() || !"this entity was not allocated!");
-            assert(entity.getID() <= mEntityNum || !"invalid entity ID!");
+			// 新しいindexを挿入
+			mpEntityIDs.emplace_back(pIndex);
 
-            // 書き込む型までのオフセット
-            const std::size_t offset = mArchetype.getTypeOffset(mArchetype.getTypeIndex<T>(), mMaxEntityNum);
+			if (mEntityNum + 1 >= mMaxEntityNum)
+			{
+				// DEBUG!!!!!!!!
+				//std::cerr << "plus realloc : " << mMaxEntityNum * 2 << "\n";
+				// メモリを再割り当てする
+				reallocate(mMaxEntityNum * 2);  // std::vectorの真似
+			}
 
-            // 書き込み
-            std::memcpy(mMemory + offset + entity.getID() * sizeof(T), &value, sizeof(T));
-        }
+			// 更新
+			++mEntityNum;
 
-        /**
-         * @brief  ComponentDataの値を取得する
-         *
-         * @tparam T 取得するComponentDataの型
-         * @tparam typename ComponentData型か判定する
-         * @param entity 取得先のEntity
-         * @return 取得した値
-         */
-        template <typename T, typename = std::enable_if_t<IsComponentDataType<T>>>
-        T& getComponentData(const Entity& entity) const
-        {
-            assert(mArchetype.isIn<T>() || !"T is not in Archetype");
-            // const std::size_t* memToIndexPart = reinterpret_cast<std::size_t*>(mMemory + mArchetype.getAllTypeSize() * mMaxEntityNum);
-            // const std::size_t index           = memToIndexPart[entity.getID()];
-            // assert(index != std::numeric_limits<size_t>::max() || !"this entity was not allocated!");
+			return entity;
+		}
 
-            // 書き込む型までのオフセット
-            std::size_t offset = mArchetype.getTypeOffset(mArchetype.getTypeIndex<T>(), mMaxEntityNum);
+		/**
+		 * @brief 指定したEntityを削除してメモリを詰める
+		 *
+		 * @param entity 削除するEntity
+		 */
+		virtual void deallocate(const Entity& entity) override
+		{
+			std::size_t deallocatedIndex = entity.getID();
 
-            // 読み出し
-            // return *reinterpret_cast<T*>(mMemory + offset + index * sizeof(T));
-            return *reinterpret_cast<T*>(mMemory + offset + entity.getID() * sizeof(T));
-        }
+			// 破棄
+			for (std::size_t i = 0; i < sizeof...(Args); ++i)
+			{
+				// 書き込む型までのオフセット
+				const std::size_t offset = mArchetype.getTypeOffset(i, mMaxEntityNum);
 
-        /**
-         * @brief Entityが増えたらメモリを割り当て直す
-         *
-         * @param maxEntityNum 新しい最大Entity数
-         */
-        void reallocate(const std::size_t maxEntityNum);
+				std::byte* ptr = (mpMemory + offset + entity.getID() * mArchetype.getTypeSize(i));
 
-        /**
-         * @brief 指定した型のComponentArrayを取得する
-         * @details 渡されたアドレスは無効になる可能性があるため操作には注意する
-         * @tparam T ComponentDataの型
-         * @tparam typename ComponentData型判定用
-         * @return ComponentArray<T>
-         */
-        template <typename T, typename = std::enable_if_t<IsComponentDataType<T>>>
-        ComponentArray<T> getComponentArray() const
-        {
-            assert(mArchetype.isIn<T>() || !"T is not in Archetype");
+				destruct<Args...>(mArchetype.getReverseTypeIndex(i), ptr);
+			}
 
-            // 使用する型までのオフセット
-            std::size_t offset = mArchetype.getTypeOffset(mArchetype.getTypeIndex<T>(), mMaxEntityNum);
+			// indexを削除
+			auto&& itr = std::remove_if(
+				mpEntityIDs.begin(),
+				mpEntityIDs.end(),
+				[&](std::size_t* pIndex)
+				{
+					if (*pIndex == deallocatedIndex)
+					{
+						delete pIndex;
+						return true;
+					}
+					else if (*pIndex > deallocatedIndex)
+					{
+						--(*pIndex);
+					}
 
-            return ComponentArray<T>(reinterpret_cast<T*>(mMemory + offset), mEntityNum);
-        }
+					return false;
+				});
+			mpEntityIDs.erase(itr, mpEntityIDs.end());
 
-        /**
-         * @brief 現在のEntityの個数を取得する
-         *
-         * @return std::size_t 個数
-         */
-        std::size_t getEntityNum() const;
+			// 実際のメモリ領域を移動
+			if (mEntityNum > deallocatedIndex + 1)
+			{
+				std::byte* dst = nullptr, * src = nullptr;
+				std::size_t offset = 0;
+				for (std::size_t i = 0; i < mArchetype.getTypeCount(); ++i)
+				{
+					const auto&& typeSize = mArchetype.getTypeSize(i);
+					dst = mpMemory + offset + deallocatedIndex * typeSize;
+					src = dst + typeSize;  // 後ろに1つずらす
+					std::memmove(dst, src, (mEntityNum - deallocatedIndex - 1) * typeSize);
+					offset += typeSize * mMaxEntityNum;
+				}
+			}
 
-        /**
-         * @brief メモリダンプ
-         *
-         */
-        void dumpMemory() const;
+			// Entity数更新
+			--mEntityNum;
 
-        /**
-         * @brief EntityのIDと実際のメモリを対応づけている部分をダンプする
-         *
-         */
-        void dumpIndexMemory() const;
+			// 1/3を切ってる場合はメモリを切り詰める
+			if (mEntityNum && mEntityNum < (mMaxEntityNum / 3) && mMaxEntityNum > 16)
+			{
+				// DEBUG!!!!!!!!!
+				//std::cerr << "minus realloc : " << mMaxEntityNum / 2 << "\n";
 
-    private:
+				reallocate(mMaxEntityNum / 2);
+			}
+		}
 
-        void insertEntityIndex(std::size_t* pIndex);
+		/**
+		 * @brief Entityが増えたらメモリを割り当て直す
+		 *
+		 * @param maxEntityNum 新しい最大Entity数
+		 */
+		virtual void reallocate(const std::size_t newMaxEntityNum) override
+		{
+			assert(newMaxEntityNum != mMaxEntityNum);
+			assert(newMaxEntityNum >= mEntityNum);
 
-        //! ChunkのID
-        std::size_t mID;
+			const auto oldMaxEntityNum = mMaxEntityNum;
 
-        //! もととなるArchetype
-        Archetype mArchetype;
-        //! メモリアドレス
-        std::byte* mMemory;
-        //! 割り当てられる最大のEntity数
-        std::size_t mMaxEntityNum;
-        //! 現在のEntity数
-        std::size_t mEntityNum;
-        //! Entityに割り当てるテーブルの添字(ID)
-        // std::size_t mNextEntityIndex;
-        
-        //!  割り当てたEntityたちのIDアドレス(destroyに応じて書き換える)
-        std::vector<std::size_t*> mpEntityIDs;
-    };
+			// 新メモリ割当て
+			auto&& newMemSize = mArchetype.getAllTypeSize() * newMaxEntityNum;
+			std::byte* newMem = new std::byte[mArchetype.getAllTypeSize() * newMaxEntityNum]();
+			std::memset(newMem, 0, newMemSize);
+
+			{  // データ移行
+				std::size_t newOffset = 0, oldOffset = 0;
+				const auto&& typeCount = mArchetype.getTypeCount();
+				for (std::size_t i = 0; i < typeCount; ++i)
+				{
+					const auto&& typeSize = mArchetype.getTypeSize(i);
+
+					// TODO: ここで全Entityに対してコピーコンストラクタを呼ぶ
+					if (isTriviallyCopyable<Args...>(mArchetype.getReverseTypeIndex(i)))
+					{
+						memcpy(newMem + newOffset, mpMemory + oldOffset, typeSize * mEntityNum);
+					}
+					else
+					{
+						for (const auto pEntity : mpEntityIDs)
+						{
+							std::byte* pSrc = mpMemory + oldOffset + *pEntity * typeSize;
+							std::byte* pDst = newMem + newOffset + *pEntity * typeSize;
+
+							copyConstruct<Args...>(mArchetype.getReverseTypeIndex(i), pSrc, pDst);
+						}
+					}
+
+					newOffset += typeSize * newMaxEntityNum;
+					oldOffset += typeSize * oldMaxEntityNum;
+				}
+			}
+
+			// アドレス移行
+			delete[] mpMemory;
+			mpMemory = newMem;
+
+			mMaxEntityNum = newMaxEntityNum;
+		}
+
+		/**
+		 * @brief 完全にChunkを破棄する(メモリを全て解放する)
+		 *
+		 */
+		virtual void destroy()
+		{
+			if (!mpMemory || mpEntityIDs.empty())
+			{
+				return;
+			}
+
+			// ここで全ComponentDataに対してデストラクタを呼ぶ
+			for (std::size_t i = 0; i < sizeof...(Args); ++i)
+			{
+				// 書き込む型までのオフセット
+				const std::size_t offset = mArchetype.getTypeOffset(i, mMaxEntityNum);
+
+				for (const auto pEntity : mpEntityIDs)
+				{
+					std::byte* ptr = mpMemory + offset + *pEntity * mArchetype.getTypeSize(i);
+					destruct<Args...>(mArchetype.getReverseTypeIndex(i), ptr);
+				}
+			}
+
+			delete[] mpMemory;
+			mpMemory = nullptr;
+
+			for (auto p : mpEntityIDs)
+			{
+				delete p;
+			}
+
+			mpEntityIDs.clear();
+		}
+
+		/**
+		 * @brief entityをotherのChunkに移動する
+		 *
+		 * @param other 移動先Chunk
+		 */
+		Entity moveTo(const Entity& entity, IChunk& other)
+		{
+			const std::size_t srcIndex = entity.getID();
+
+			// 移動先Entityをallocate
+			Entity rtn = other.allocate();
+			const std::size_t dstIndex = rtn.getID();
+
+			std::byte* dst = nullptr, * src = nullptr;
+			std::size_t dstOffset = 0, srcOffset = 0;
+			std::size_t size = 0;
+			if (mArchetype.getAllTypeSize() < other.mArchetype.getAllTypeSize())  // 移動元 < 移動先
+			{
+				for (std::size_t i = 0; i < sizeof...(Args); ++i)
+				{
+					srcOffset = mArchetype.getTypeOffset(i, mMaxEntityNum);
+					dstOffset = other.mArchetype.getTypeOffset(other.mArchetype.getTypeIndex(mArchetype.getTypeHash(i)), other.mMaxEntityNum);
+
+					size = mArchetype.getTypeSize(i);
+					dst = other.mpMemory + dstOffset + dstIndex * size;
+					src = mpMemory + srcOffset + srcIndex * size;
+
+					if (isTriviallyCopyable(i))
+					{
+						std::memcpy(dst, src, size * mEntityNum);
+					}
+					else
+					{
+						// 書き込む型までのオフセット
+						for (const auto pEntity : mpEntityIDs)
+						{
+							std::byte* pSrc = src + *pEntity * size;
+							std::byte* pDst = dst + *pEntity * size;
+
+							copyConstruct<Args...>(i, pSrc, pDst);
+						}
+					}
+
+
+				}
+			}
+			else  // 移動元 >= 移動先
+			{
+				for (std::size_t i = 0; i < other.mArchetype.getTypeCount(); ++i)
+				{
+					srcOffset = other.mArchetype.getTypeOffset(other.mArchetype.getTypeIndex(mArchetype.getTypeHash(i)), other.mMaxEntityNum);
+					dstOffset = mArchetype.getTypeOffset(i, mMaxEntityNum);
+
+					size = mArchetype.getTypeSize(i);
+					dst = mpMemory + srcOffset + srcIndex * size;
+					src = other.mpMemory + dstOffset + dstIndex * size;
+
+					if (isTriviallyCopyable(i))
+					{
+						std::memcpy(dst, src, size * mEntityNum);
+					}
+					else
+					{
+						// 書き込む型までのオフセット
+						for (const auto pEntity : mpEntityIDs)
+						{
+							std::byte* pSrc = src + *pEntity * size;
+							std::byte* pDst = dst + *pEntity * size;
+
+							copyConstruct<Args...>(i, pSrc, pDst);
+						}
+					}
+				}
+			}
+
+			return rtn;
+		}
+
+	private:
+
+		/**
+		 * @brief このアドレスに指定した型を配置newする
+		 *
+		 * @param typeIndex Args...の何番目の型か(Archetype::getReverseTypeIndex()を用いる)
+		 * @param ptr 配置newされるアドレス
+		 */
+		template<typename Head, typename... Tail>
+		constexpr void construct(std::size_t typeIndex, std::byte* ptr)
+		{
+
+			if (typeIndex == sizeof...(Args) - sizeof...(Tail) - 1)
+			{
+				if constexpr (!std::is_trivially_constructible_v<Head>)
+				{
+					new(ptr) Head();
+				}
+
+				return;
+			}
+
+			if constexpr (sizeof...(Tail) > 0)
+			{
+				construct<Tail...>(typeIndex, ptr);
+			}
+		}
+
+		/**
+		 * @brief このアドレスで指定した型のデストラクタを呼ぶ
+		 * 
+		 * @param typeIndex Args...の何番目の型か(Archetype::getReverseTypeIndex()を用いる)
+		 * @param ptr
+		 */
+		template<typename Head, typename... Tail>
+		constexpr void destruct(std::size_t typeIndex, std::byte* ptr)
+		{
+
+			if (typeIndex == sizeof...(Args) - sizeof...(Tail) - 1)
+			{
+				if constexpr (!std::is_trivially_destructible_v<Head>)
+				{
+					reinterpret_cast<Head*>(ptr)->~Head();
+				}
+
+				return;
+			}
+
+			if constexpr (sizeof...(Tail) > 0)
+			{
+				destruct<Tail...>(typeIndex, ptr);
+			}
+		}
+
+		/**
+		 * @brief srcからdstへ指定した型でのコピーを行う
+		 * 
+		 * @param typeIndex Args...の何番目の型か(Archetype::getReverseTypeIndex()を用いる)
+		 * @param src コピー元アドレス
+		 * @param dst コピー先アドレス
+		 */
+		template<typename Head, typename... Tail>
+		constexpr void copyConstruct(std::size_t typeIndex, std::byte* src, std::byte* dst)
+		{
+			if (typeIndex == sizeof...(Args) - sizeof...(Tail) - 1)
+			{
+
+				new(dst) Head(*reinterpret_cast<Head*>(src));
+
+				return;
+			}
+
+			if constexpr (sizeof...(Tail) > 0)
+			{
+				copyConstruct<Tail...>(typeIndex, src, dst);
+			}
+		}
+
+		/**
+		 * @brief その型がtrivially_copyableかどうか判定する
+		 * 
+		 * @param typeIndex Args...の何番目の型か(Archetype::getReverseTypeIndex()を用いる)
+		 * @return trivially_copyableかどうか
+		 */
+		template<typename Head, typename... Tail>
+		constexpr bool isTriviallyCopyable(std::size_t typeIndex)
+		{
+			if (typeIndex == sizeof...(Args) - sizeof...(Tail) - 1)
+			{
+				return std::is_trivially_copyable_v<Head>;
+			}
+
+			if constexpr (sizeof...(Tail) > 0)
+			{
+				isTriviallyCopyable<Tail...>(typeIndex);
+			}
+
+			return false;
+		}
+
+	};
 }  // namespace mvecs
 
 #endif
