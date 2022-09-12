@@ -460,8 +460,7 @@ namespace mvecs
 		{
 			if (typeIndex == sizeof...(Args) - sizeof...(Tail) - 1)
 			{
-
-				new(dst) Head(*reinterpret_cast<Head*>(src));
+				new(dst) Head(std::move(*reinterpret_cast<Head*>(src)));
 
 				return;
 			}

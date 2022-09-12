@@ -69,11 +69,6 @@ class System : public mvecs::ISystem<int, Common>
 		{
 			mEntity = createEntity<A, B, C>();
 		}
-		//destroyEntity(*mEntity);
-
-		//std::cout << A::getTypeHash() << "\n";
-		//std::cout << B::getTypeHash() << "\n";
-		//std::cout << C::getTypeHash() << "\n";
 
 	}
 
